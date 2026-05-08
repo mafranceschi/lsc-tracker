@@ -1,0 +1,17 @@
+# Para compañeros: levantar sin necesitar el código fuente
+services:
+  app:
+    image: mafranceschi/lsc-tracker:latest
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - ENABLE_DB=true
+      - RETENTION_DAYS=30
+      - GOAL_HOURS=12
+      - MAX_LOG_MB=10
+    volumes:
+      - lsc-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  lsc-data:
