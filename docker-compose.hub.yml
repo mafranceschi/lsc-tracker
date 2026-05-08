@@ -1,7 +1,7 @@
 # Para compañeros: levantar sin necesitar el código fuente
 services:
   app:
-    image: mafranceschi/lsc-tracker:latest
+    image: franceschimateo/lsc-tracker:latest
     ports:
       - "${PORT:-3000}:3000"
     environment:
