@@ -1,0 +1,14 @@
+services:
+  app:
+    build: ./backend
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    volumes:
+      # Persistir la base de datos fuera del contenedor
+      - lsc-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  lsc-data:
