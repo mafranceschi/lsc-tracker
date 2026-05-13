@@ -740,6 +740,9 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
           <button class="nav-item" id="btnGestEmp" onclick="switchTab('gest-emp')">
             <span class="ni-icon">👥</span> Gestionar empleados
           </button>
+          <button class="nav-item" id="btnBotHoras" onclick="switchTab('bot-horas')">
+            <span class="ni-icon">🤖</span> Horas BOT
+          </button>
         </div>
       </div>
 
@@ -882,6 +885,18 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
       </div>
     </div>
 
+    <!-- ── Tab: Horas BOT ── -->
+    <div id="tab-bot-horas" style="display:none">
+      <div class="page-header">
+        <div class="page-tag">empleados · horas bot</div>
+        <div class="page-h1">Horas BOT</div>
+        <div class="page-sub">Cargá las horas de Servicio BOT de cada empleado para la semana</div>
+      </div>
+      <div class="content">
+        <div id="botHorasWrap"></div>
+      </div>
+    </div>
+
     <!-- ── Tab: Sueldos ── -->
     <div id="tab-sueldos" style="display:none">
       <div class="page-header">
@@ -960,7 +975,7 @@ var CURRENT_TAB = 'analizar';
 var ALL_LOG_DATA = [];
 var selectedLogs = {};
 
-var ALL_TABS = ['analizar','historial','crear-emp','gest-emp','sueldos','facturacion'];
+var ALL_TABS = ['analizar','historial','crear-emp','gest-emp','bot-horas','sueldos','facturacion'];
 
 var RANK_CONFIG = {
   experimentado: { label: 'Experimentado', icon: '⭐', cls: 'r-experimentado' },
@@ -1036,6 +1051,7 @@ var TAB_BTN_MAP = {
   'historial':   'btnHistorial',
   'crear-emp':   'btnCrearEmp',
   'gest-emp':    'btnGestEmp',
+  'bot-horas':   'btnBotHoras',
   'sueldos':     'btnSueldos',
 };
 
@@ -1050,6 +1066,7 @@ function switchTab(name) {
   });
   if (name === 'historial') loadHistory();
   if (name === 'gest-emp')  renderEmpleados();
+  if (name === 'bot-horas') renderBotHoras();
   if (name === 'sueldos')   loadSalaryTab();
   closeSidebar();
 }
@@ -1171,6 +1188,91 @@ function eliminarEmpleado(id, nombre) {
   })
   .catch(function() { showToast('❌ Error al eliminar', 'err'); });
 }
+
+// ══ HORAS BOT ══════════════════════════════════════════════════════
+var _botSaveTimers = {};
+
+function saveBotHours(empId, val) {
+  clearTimeout(_botSaveTimers[empId]);
+  _botSaveTimers[empId] = setTimeout(function() {
+    var hours = parseInt(val, 10);
+    if (isNaN(hours) || hours < 0) hours = 0;
+    fetch('/api/empleados/' + empId, {
+      method: 'PUT',
+      headers: apiHeaders(),
+      body: JSON.stringify({ bot_hours: hours })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+      // Update the input to the saved value (in case it was corrected)
+      var inp = document.getElementById('bot-inp-' + empId);
+      if (inp) inp.value = data.empleado.bot_hours || 0;
+      var badge = document.getElementById('bot-badge-' + empId);
+      if (badge) {
+        var h = data.empleado.bot_hours || 0;
+        badge.textContent = h + 'h';
+        badge.style.color = h > 0 ? '#22d3ee' : 'var(--muted)';
+      }
+    })
+    .catch(function() { showToast('❌ Error al guardar horas BOT', 'err'); });
+  }, 600);
+}
+
+function renderBotHoras() {
+  var wrap = document.getElementById('botHorasWrap');
+  wrap.innerHTML = '<div class="empty"><span class="icon">⏳</span><p>Cargando...</p></div>';
+  fetch('/api/empleados', { headers: apiHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var emps = (data.empleados || []).filter(function(e) { return e.nombre; });
+      if (!emps.length) {
+        wrap.innerHTML = '<div class="empty"><span class="icon">👥</span><p>No hay empleados registrados.</p></div>';
+        return;
+      }
+      var RANK_ORDER = ['director','jefe','subjefe','ingeniero','experimentado'];
+      emps.sort(function(a,b) {
+        var ra = RANK_ORDER.indexOf(a.rango), rb = RANK_ORDER.indexOf(b.rango);
+        if (ra === -1) ra = RANK_ORDER.length;
+        if (rb === -1) rb = RANK_ORDER.length;
+        return ra - rb;
+      });
+
+      var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;padding-bottom:2rem">';
+      var COLORS_L = [
+        ['rgba(139,92,246,0.15)','#c4b5fd'],['rgba(34,211,238,0.15)','#67e8f9'],
+        ['rgba(245,158,11,0.15)','#fcd34d'],['rgba(239,68,68,0.15)','#fca5a5'],
+        ['rgba(16,185,129,0.15)','#6ee7b7'],['rgba(236,72,153,0.15)','#f9a8d4'],
+      ];
+      for (var i = 0; i < emps.length; i++) {
+        var e = emps[i];
+        var col = COLORS_L[i % COLORS_L.length];
+        var cfg = RANK_CONFIG[e.rango] || { label: e.rango, icon: '' };
+        var bh  = e.bot_hours || 0;
+        html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.1rem 1rem;display:flex;flex-direction:column;gap:0.6rem">'
+          + '<div style="display:flex;align-items:center;gap:0.65rem">'
+          + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + ';width:36px;height:36px;border-radius:9px;font-size:0.85rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
+          + '<div style="min-width:0">'
+          + '<div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(e.nombre) + '</div>'
+          + '<div style="font-size:0.65rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace">' + cfg.icon + ' ' + cfg.label + '</div>'
+          + '</div></div>'
+          + '<div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.1rem">'
+          + '<label style="font-family:\'JetBrains Mono\',monospace;font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap">Horas BOT</label>'
+          + '<input id="bot-inp-' + e.id + '" type="number" min="0" step="1" value="' + bh + '" '
+          + 'style="flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:0.35rem 0.6rem;font-size:0.85rem;font-family:\'JetBrains Mono\',monospace;width:0;min-width:0;text-align:center" '
+          + 'oninput="saveBotHours(' + e.id + ', this.value)" />'
+          + '<span id="bot-badge-' + e.id + '" style="font-family:\'JetBrains Mono\',monospace;font-size:0.75rem;font-weight:700;min-width:28px;text-align:right;color:' + (bh > 0 ? '#22d3ee' : 'var(--muted)') + '">' + bh + 'h</span>'
+          + '</div></div>';
+      }
+      html += '</div>';
+      html += '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.6rem;color:var(--muted);margin-top:0.5rem">Los valores se guardan automáticamente y se reflejan en la liquidación y el Excel.</div>';
+      wrap.innerHTML = html;
+    })
+    .catch(function() {
+      wrap.innerHTML = '<div class="empty"><span class="icon">❌</span><p>Error al cargar empleados.</p></div>';
+    });
+}
+// ══════════════════════════════════════════════════════════════════
 
 function renderEmpleados() {
   var wrap  = document.getElementById('empTableWrap');
@@ -1891,7 +1993,7 @@ function renderSalaryResult(rows, unmatched, logs) {
     + '<div class="combined-days" style="margin-bottom:1.25rem">' + chipsHtml + '</div>'
     + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:var(--muted);margin-bottom:0.75rem">Usá ↑ y ✕ para marcar ascensos/despidos antes de descargar</div>'
     + '<div class="emp-table-wrap"><table class="salary-table"><thead><tr>'
-    + '<th>Empleado</th><th>Rango</th><th>Horas semana</th><th>Sueldo</th><th style="width:90px;text-align:center">Ascenso</th><th style="width:90px;text-align:center">Despedido</th>'
+    + '<th>Empleado</th><th>Rango</th><th>Horas semana</th><th style="text-align:center">Serv. BOT</th><th>Sueldo</th><th style="width:90px;text-align:center">Ascenso</th><th style="width:90px;text-align:center">Despedido</th>'
     + '</tr></thead><tbody>';
 
   for (var i = 0; i < rows.length; i++) {
@@ -1926,6 +2028,7 @@ function renderSalaryResult(rows, unmatched, logs) {
       + '</div></div></td>'
       + '<td><span class="rank-badge ' + cfg.cls + '">' + cfg.icon + ' ' + cfg.label + '</span></td>'
       + '<td><span class="salary-hours">' + (r.totalMins > 0 ? t.str : '<span style="color:var(--muted)">—</span>') + '</span></td>'
+      + '<td style="text-align:center">' + (e.bot_hours > 0 ? '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.78rem;font-weight:700;color:#22d3ee">' + e.bot_hours + 'h</span>' : '<span style="color:var(--muted);font-size:0.75rem">—</span>') + '</td>'
       + '<td><span class="salary-amount ' + salaryCls + '">' + salaryTxt + '</span></td>'
       + '<td style="text-align:center"><button id="btn-asc-' + e.id + '" class="btn-icon" onclick="toggleAscenso(' + e.id + ')" title="Marcar ascenso" style="' + (ascActive ? 'color:#00b050;border-color:rgba(0,176,80,0.4);background:rgba(0,176,80,0.08)' : '') + '">↑</button></td>'
       + '<td style="text-align:center"><button id="btn-fire-' + e.id + '" class="btn-icon" onclick="toggleFired(' + e.id + ')" title="Marcar despedido" style="' + (fireActive ? 'color:var(--danger);border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.06)' : '') + '">✕</button></td>'
@@ -2243,10 +2346,11 @@ async function generateSalaryExcel() {
     if (!fired) { totalSalary += row.salary; empCount++; }
     var salStr = fired ? '' : (reachedMin ? row.salary+'M' : '');
 
+    var botStr = (e.bot_hours && e.bot_hours > 0) ? e.bot_hours + 'h' : '';
     sc(curRow,CA, emptyCell(CLR_WHITE));
     sc(curRow,CB, dataCell(comentario, fill, !!comentario, 'left'));
     sc(curRow,CC, dataCell(mechStr,    fill, false,        'left'));
-    sc(curRow,CD, emptyCell(fill));
+    sc(curRow,CD, dataCell(botStr,     fill, false,        'center'));
     sc(curRow,CE, dataCell(icStr,      fill, false,        'center'));
     sc(curRow,CF, dataCell(salStr,     fill, reachedMin,   'center'));
     sc(curRow,CG, emptyCell(fill));

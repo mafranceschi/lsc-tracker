@@ -117,6 +117,7 @@ if (ENABLE_DB) {
 
   // Migraciones no destructivas — agregan columnas si no existen
   try { db.exec('ALTER TABLE empleados ADD COLUMN recently_joined_at TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE empleados ADD COLUMN bot_hours INTEGER DEFAULT 0'); } catch (_) {}
 
   console.log(`[DB] SQLite activo · ${dbPath} · retención ${RETENTION_DAYS}d · WAL ON · FK ON`);
 } else {
@@ -310,7 +311,7 @@ app.post('/api/empleados', auth, (req, res) => {
 app.put('/api/empleados/:id', auth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
-  const { nombre, identifier, rango, recently_joined } = req.body;
+  const { nombre, identifier, rango, recently_joined, bot_hours } = req.body;
   if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
   try {
     const existing = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
@@ -321,8 +322,11 @@ app.put('/api/empleados/:id', auth, (req, res) => {
     const nuevoRecentlyJoined  = recently_joined === true  ? new Date().toISOString()
                                 : recently_joined === false ? null
                                 : existing.recently_joined_at;
-    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ?, recently_joined_at = ? WHERE id = ?')
-      .run(nuevoNombre, nuevoIdentifier, nuevoRango, nuevoRecentlyJoined, id);
+    const nuevoBotHours        = (typeof bot_hours === 'number' && bot_hours >= 0)
+                                ? Math.floor(bot_hours)
+                                : (existing.bot_hours || 0);
+    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ?, recently_joined_at = ?, bot_hours = ? WHERE id = ?')
+      .run(nuevoNombre, nuevoIdentifier, nuevoRango, nuevoRecentlyJoined, nuevoBotHours, id);
     const updated = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
     res.json({ empleado: updated });
   } catch (err) {
