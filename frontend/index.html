@@ -579,14 +579,19 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 .section-card-head { font-size: 0.9rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.3rem; }
 .section-card-sub { font-size: 0.72rem; color: var(--text2); margin-bottom: 1.25rem; line-height: 1.6; }
 
-.brackets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: 0.75rem; margin-top: 1rem; }
+.brackets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 0.75rem; margin-top: 1rem; }
 .bracket-card {
   background: rgba(255,255,255,0.025); border: 1px solid var(--border);
-  border-radius: 10px; padding: 0.9rem;
+  border-radius: 10px; padding: 1rem;
 }
-.bracket-rank { font-size: 0.74rem; font-weight: 700; margin-bottom: 0.6rem; }
-.bracket-rows { display: flex; flex-direction: column; gap: 0.3rem; }
-.bracket-row { display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; }
+.bracket-rank { font-size: 0.76rem; font-weight: 700; margin-bottom: 0.65rem; }
+.bracket-rows { display: flex; flex-direction: column; gap: 0; }
+.bracket-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.6rem;
+  padding: 0.3rem 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.bracket-row:last-child { border-bottom: none; }
 .bracket-range { color: var(--text2); }
 .bracket-amount { color: var(--accent2); font-weight: 700; }
 
@@ -1604,7 +1609,9 @@ function parseSalaryText(text) {
     var minHrs = null;
     var display = clean.replace(/\s+/g,' ');
 
-    var mRange = clean.match(/[Dd]e\s+(\d+(?:\.\d+)?)\s+[Aa]\s+(\d+(?:\.\d+)?)/);
+    // Acepta: "De 12 a 20 h", "De 12 h a 20 h", "De 12a 20h", etc.
+    var mRange = clean.match(/[Dd]e\s+(\d+(?:\.\d+)?)(?:\s+[Hh])?\s+[Aa]\s+(\d+(?:\.\d+)?)/);
+    // Acepta: "Más de 35 h", "Mas de 35h", "MAS DE 35 H", etc.
     var mMore  = clean.match(/[Mm][aá]s\s+de\s+(\d+(?:\.\d+)?)/i);
 
     if (mRange)     minHrs = parseFloat(mRange[1]);
