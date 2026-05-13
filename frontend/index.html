@@ -738,12 +738,15 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
       </div>
 
       <!-- SUELDOS -->
-      <div class="nav-group nav-group-disabled" id="group-sueldos">
-        <div class="nav-group-header">
+      <div class="nav-group" id="group-sueldos">
+        <div class="nav-group-header" onclick="toggleGroup('sueldos')">
           <span class="nav-group-label">Sueldos</span>
+          <span class="nav-group-chevron">▼</span>
         </div>
         <div class="nav-group-body">
-          <div class="nav-coming-soon">Próximamente</div>
+          <button class="nav-item" id="btnSueldos" onclick="switchTab('sueldos')">
+            <span class="ni-icon">💰</span> Liquidación
+          </button>
         </div>
       </div>
 
@@ -1018,6 +1021,7 @@ var TAB_BTN_MAP = {
   'historial':   'btnHistorial',
   'crear-emp':   'btnCrearEmp',
   'gest-emp':    'btnGestEmp',
+  'sueldos':     'btnSueldos',
 };
 
 function switchTab(name) {
