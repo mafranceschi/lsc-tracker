@@ -462,10 +462,38 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 
 /* ══ HISTORY ══════════════════════════════════════ */
 .hist-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem; }
-.hist-entry { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 0.75rem; transition: border-color 0.15s; }
+
+/* Checkbox de selección */
+.hist-check-wrap {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; flex-shrink: 0; cursor: pointer;
+}
+.hist-check {
+  width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent);
+  border-radius: 4px;
+}
+
+.hist-entry {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 0.75rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
 .hist-entry:hover { border-color: rgba(var(--accentRGB),0.18); }
-.hist-entry-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; cursor: pointer; gap: 1rem; user-select: none; transition: background 0.15s; }
+.hist-entry.selected {
+  border-color: rgba(var(--accentRGB),0.45);
+  box-shadow: 0 0 0 1px rgba(var(--accentRGB),0.15);
+}
+
+.hist-entry-head {
+  display: flex; align-items: center;
+  padding: 0.85rem 1.25rem 0.85rem 0.5rem;
+  gap: 0.5rem; user-select: none; transition: background 0.15s;
+}
 .hist-entry-head:hover { background: rgba(255,255,255,0.02); }
+.hist-head-clickable {
+  display: flex; align-items: center; justify-content: space-between;
+  flex: 1; cursor: pointer; gap: 1rem; min-width: 0;
+}
 .hist-meta { flex: 1; min-width: 0; }
 .hist-date { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--accent2); }
 .hist-summary { font-family: 'JetBrains Mono', monospace; font-size: 0.59rem; color: var(--muted); margin-top: 0.15rem; }
@@ -476,6 +504,41 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 .hist-agent .ha-name { color: var(--text); font-weight: 700; font-size: 0.68rem; display: block; margin-bottom: 0.2rem; }
 .hist-agent .ha-mins { color: var(--accent2); }
 .hist-agent .ha-pills { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.35rem; }
+
+/* Barra de selección flotante */
+.select-bar {
+  position: fixed; bottom: 1.75rem; left: 50%; transform: translateX(-50%);
+  background: var(--card2); border: 1px solid rgba(var(--accentRGB),0.35);
+  border-radius: 14px; padding: 0.75rem 1rem;
+  display: flex; align-items: center; gap: 0.75rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(var(--accentRGB),0.1);
+  z-index: 50; animation: fadeUp 0.2s ease;
+  font-size: 0.82rem; white-space: nowrap;
+}
+.select-bar-count {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--text2); padding-right: 0.5rem; border-right: 1px solid var(--border);
+}
+.select-bar-count strong { color: #c4b5fd; }
+.btn-clear-sel {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 1rem; padding: 0.1rem 0.3rem; border-radius: 6px; transition: color 0.15s;
+}
+.btn-clear-sel:hover { color: var(--danger); }
+
+/* Vista combinada semanal */
+.combined-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;
+}
+.combined-title { font-size: 1rem; font-weight: 700; }
+.combined-days { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.5rem; }
+.day-chip {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.6rem;
+  background: rgba(var(--accent2RGB),0.08); color: var(--accent2);
+  border: 1px solid rgba(var(--accent2RGB),0.2);
+  border-radius: 99px; padding: 0.22rem 0.7rem;
+}
 
 /* ══ MISC ═════════════════════════════════════════ */
 .empty { text-align: center; padding: 5rem 1rem; color: var(--muted); }
@@ -544,6 +607,13 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 
 <!-- Toast -->
 <div id="toast" class="toast" style="display:none"></div>
+
+<!-- Select bar (fixed floating) -->
+<div id="selectBar" class="select-bar" style="display:none">
+  <span class="select-bar-count"><strong id="selCount">0</strong> seleccionado<span id="selPlural">s</span></span>
+  <button class="btn-primary btn-sm" onclick="showCombined()">📊 Ver suma</button>
+  <button class="btn-clear-sel" onclick="clearSelection()" title="Limpiar selección">×</button>
+</div>
 
 <!-- Topbar móvil -->
 <div class="topbar">
@@ -674,11 +744,12 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
         <div class="page-sub">Últimos 100 registros guardados automáticamente</div>
       </div>
       <div class="content">
-        <div class="hist-bar">
+        <div class="hist-bar" id="histBarWrap">
           <span class="chip" id="histBadge">0 registros</span>
           <button class="btn-ghost btn-sm" onclick="loadHistory()">↻ Actualizar</button>
         </div>
         <div id="historyList"></div>
+        <div id="combinedView" style="display:none"></div>
       </div>
     </div>
 
@@ -776,6 +847,8 @@ var GOAL_MINS   = 12 * 60;
 var SESSION_KEY = localStorage.getItem('lsc_api_key') || '';
 var PENDING_AUTH_CB = null;
 var CURRENT_TAB = 'analizar';
+var ALL_LOG_DATA = [];
+var selectedLogs = {};
 
 var ALL_TABS = ['analizar','historial','crear-emp','gest-emp','sueldos','facturacion'];
 
@@ -1158,44 +1231,184 @@ function clearAll() {
 
 // ══ HISTORIAL ════════════════════════════════════
 function loadHistory() {
-  var listEl=document.getElementById('historyList');
-  listEl.innerHTML='<div class="empty"><span class="icon">⏳</span><p>Cargando...</p></div>'; listEl.onclick=null;
+  var listEl = document.getElementById('historyList');
+  listEl.innerHTML = '<div class="empty"><span class="icon">⏳</span><p>Cargando...</p></div>';
+  listEl.onclick = null;
+  // Reset selection when reloading
+  selectedLogs = {};
+  ALL_LOG_DATA = [];
+  updateSelection();
+  // Ensure combined view is hidden
+  var cv = document.getElementById('combinedView');
+  if (cv) cv.style.display = 'none';
+  var hw = document.getElementById('histBarWrap');
+  if (hw) hw.style.display = '';
+  listEl.style.display = '';
+
   function doLoad() {
-    fetch('/api/logs',{headers:apiHeaders()})
-      .then(function(r){ if(r.status===401){listEl.innerHTML='<div class="empty"><span class="icon">🔑</span><p>Se requiere API Key.</p></div>';handleUnauth(doLoad);return null;} return r.json(); })
-      .then(function(data){ if(!data)return;
-        if(!data.dbEnabled){listEl.innerHTML='<div class="empty"><span class="icon">❌</span><p>La DB está desactivada.</p></div>';return;}
-        var logs=data.logs,badge=document.getElementById('histBadge'),cnt=document.getElementById('histCount');
-        badge.textContent=logs.length+' registro'+(logs.length!==1?'s':'');
-        if(cnt){cnt.textContent=logs.length;cnt.style.display=logs.length>0?'':'none';}
-        if(logs.length===0){listEl.innerHTML='<div class="empty"><span class="icon">📫</span><p>No hay registros guardados aún.</p></div>';return;}
-        var html='';
-        for(var i=0;i<logs.length;i++){
-          var log=logs[i],agents=log.agents,totalMins=0;
-          for(var j=0;j<agents.length;j++) totalMins+=agents[j].totalMins;
-          var tt=fmtTime(totalMins),summary=agents.length+' agente'+(agents.length!==1?'s':'')+' · log #'+log.id+' · '+tt.str+' total';
-          var agentRows='';
-          for(var j=0;j<agents.length;j++){
-            var a=agents[j],at=fmtTime(a.totalMins),sp='';
-            for(var k=0;k<a.sessions.length;k++){
-              var s=a.sessions[k],cls=s.tipo.indexOf('Desconex')>=0?'dc':'sv',lbl=s.tipo.indexOf('Desconex')>=0?'↓':'↑';
-              sp+='<span class="pill '+cls+'">'+lbl+' '+fmtTime(s.mins).str+'</span>';
-            }
-            agentRows+='<div class="hist-agent"><span class="ha-name">'+esc(a.name)+'</span><span class="ha-mins">'+at.str+'</span>'+(sp?'<div class="ha-pills">'+sp+'</div>':'')+'</div>';
-          }
-          html+='<div class="hist-entry"><div class="hist-entry-head"><div class="hist-meta"><div class="hist-date">'+esc(fmtDate(log.savedAt))+'</div><div class="hist-summary">'+esc(summary)+'</div></div><span class="hist-chev">▼</span></div><div class="hist-body"><div class="hist-agents">'+agentRows+'</div></div></div>';
+    fetch('/api/logs', { headers: apiHeaders() })
+      .then(function(r) {
+        if (r.status === 401) {
+          listEl.innerHTML = '<div class="empty"><span class="icon">🔑</span><p>Se requiere API Key.</p></div>';
+          handleUnauth(doLoad); return null;
         }
-        listEl.innerHTML=html;
-        listEl.onclick=function(e){
-          var header=e.target.closest('.hist-entry-head'); if(!header)return;
-          var body=header.closest('.hist-entry').querySelector('.hist-body'),chev=header.querySelector('.hist-chev');
-          var isOpen=body.style.display==='block';
-          body.style.display=isOpen?'none':'block'; chev.style.transform=isOpen?'':'rotate(180deg)';
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        if (!data.dbEnabled) {
+          listEl.innerHTML = '<div class="empty"><span class="icon">❌</span><p>La DB está desactivada.</p></div>'; return;
+        }
+        var logs = data.logs;
+        ALL_LOG_DATA = logs;
+        var badge = document.getElementById('histBadge'), cnt = document.getElementById('histCount');
+        badge.textContent = logs.length + ' registro' + (logs.length !== 1 ? 's' : '');
+        if (cnt) { cnt.textContent = logs.length; cnt.style.display = logs.length > 0 ? '' : 'none'; }
+        if (logs.length === 0) {
+          listEl.innerHTML = '<div class="empty"><span class="icon">📫</span><p>No hay registros guardados aún.</p></div>'; return;
+        }
+        var html = '';
+        for (var i = 0; i < logs.length; i++) {
+          var log = logs[i], agents = log.agents, totalMins = 0;
+          for (var j = 0; j < agents.length; j++) totalMins += agents[j].totalMins;
+          var tt = fmtTime(totalMins);
+          var summary = agents.length + ' agente' + (agents.length !== 1 ? 's' : '') + ' · log #' + log.id + ' · ' + tt.str + ' total';
+          var agentRows = '';
+          for (var j = 0; j < agents.length; j++) {
+            var a = agents[j], at = fmtTime(a.totalMins), sp = '';
+            for (var k = 0; k < a.sessions.length; k++) {
+              var s = a.sessions[k], cls = s.tipo.indexOf('Desconex') >= 0 ? 'dc' : 'sv', lbl = s.tipo.indexOf('Desconex') >= 0 ? '↓' : '↑';
+              sp += '<span class="pill ' + cls + '">' + lbl + ' ' + fmtTime(s.mins).str + '</span>';
+            }
+            agentRows += '<div class="hist-agent"><span class="ha-name">' + esc(a.name) + '</span><span class="ha-mins">' + at.str + '</span>' + (sp ? '<div class="ha-pills">' + sp + '</div>' : '') + '</div>';
+          }
+          html += '<div class="hist-entry" data-logid="' + log.id + '">'
+            + '<div class="hist-entry-head">'
+            + '<div class="hist-check-wrap"><input type="checkbox" class="hist-check" data-logid="' + log.id + '" onchange="toggleLogSelection(' + log.id + ', this)"></div>'
+            + '<div class="hist-head-clickable">'
+            + '<div class="hist-meta"><div class="hist-date">' + esc(fmtDate(log.savedAt)) + '</div><div class="hist-summary">' + esc(summary) + '</div></div>'
+            + '<span class="hist-chev">▼</span>'
+            + '</div></div>'
+            + '<div class="hist-body"><div class="hist-agents">' + agentRows + '</div></div>'
+            + '</div>';
+        }
+        listEl.innerHTML = html;
+        listEl.onclick = function(e) {
+          var clickable = e.target.closest('.hist-head-clickable');
+          if (!clickable) return;
+          var entry = clickable.closest('.hist-entry');
+          var body = entry.querySelector('.hist-body');
+          var chev = clickable.querySelector('.hist-chev');
+          var isOpen = body.style.display === 'block';
+          body.style.display = isOpen ? 'none' : 'block';
+          chev.style.transform = isOpen ? '' : 'rotate(180deg)';
         };
       })
-      .catch(function(){listEl.innerHTML='<div class="empty"><span class="icon">⚠️</span><p>No se pudo conectar.</p></div>';});
+      .catch(function() {
+        listEl.innerHTML = '<div class="empty"><span class="icon">⚠️</span><p>No se pudo conectar.</p></div>';
+      });
   }
   doLoad();
+}
+
+function toggleLogSelection(logId, checkbox) {
+  var log = null;
+  for (var i = 0; i < ALL_LOG_DATA.length; i++) {
+    if (ALL_LOG_DATA[i].id === logId) { log = ALL_LOG_DATA[i]; break; }
+  }
+  if (!log) return;
+  var entry = document.querySelector('.hist-entry[data-logid="' + logId + '"]');
+  if (checkbox.checked) {
+    selectedLogs[logId] = log;
+    if (entry) entry.classList.add('selected');
+  } else {
+    delete selectedLogs[logId];
+    if (entry) entry.classList.remove('selected');
+  }
+  updateSelection();
+}
+
+function updateSelection() {
+  var ids = Object.keys(selectedLogs);
+  var bar = document.getElementById('selectBar');
+  var countEl = document.getElementById('selCount');
+  var pluralEl = document.getElementById('selPlural');
+  if (ids.length > 0) {
+    bar.style.display = 'flex';
+    countEl.textContent = ids.length;
+    if (pluralEl) pluralEl.textContent = ids.length === 1 ? '' : 's';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearSelection() {
+  selectedLogs = {};
+  var checks = document.querySelectorAll('.hist-check');
+  for (var i = 0; i < checks.length; i++) checks[i].checked = false;
+  var entries = document.querySelectorAll('.hist-entry.selected');
+  for (var i = 0; i < entries.length; i++) entries[i].classList.remove('selected');
+  updateSelection();
+  // Return to list if in combined view
+  var cv = document.getElementById('combinedView');
+  if (cv && cv.style.display !== 'none') backToHistory();
+}
+
+function showCombined() {
+  var ids = Object.keys(selectedLogs);
+  if (ids.length === 0) return;
+
+  // Sort selected logs chronologically
+  var sortedLogs = ids.map(function(id) { return selectedLogs[id]; });
+  sortedLogs.sort(function(a, b) { return new Date(a.savedAt) - new Date(b.savedAt); });
+
+  // Merge agents by identifier
+  var agentMap = {}, sessionCountTotal = 0;
+  for (var i = 0; i < sortedLogs.length; i++) {
+    var log = sortedLogs[i];
+    for (var j = 0; j < log.agents.length; j++) {
+      var a = log.agents[j];
+      if (!agentMap[a.identifier]) {
+        agentMap[a.identifier] = { identifier: a.identifier, name: a.name, totalMins: 0, sessions: [] };
+      }
+      agentMap[a.identifier].totalMins += a.totalMins;
+      for (var k = 0; k < a.sessions.length; k++) {
+        agentMap[a.identifier].sessions.push(a.sessions[k]);
+        sessionCountTotal++;
+      }
+    }
+  }
+
+  var agents = Object.keys(agentMap).map(function(k) { return agentMap[k]; });
+  agents.sort(function(a, b) { return b.totalMins - a.totalMins; });
+
+  // Build day chips
+  var chipsHtml = sortedLogs.map(function(l) {
+    return '<span class="day-chip">📅 ' + esc(fmtDate(l.savedAt)) + '</span>';
+  }).join('');
+
+  // Switch views
+  document.getElementById('historyList').style.display = 'none';
+  document.getElementById('histBarWrap').style.display = 'none';
+  document.getElementById('selectBar').style.display = 'none';
+
+  var combinedView = document.getElementById('combinedView');
+  combinedView.innerHTML = '<div class="combined-header">'
+    + '<span class="combined-title">Suma semanal &mdash; ' + ids.length + ' ejecución' + (ids.length !== 1 ? 'es' : '') + '</span>'
+    + '<button class="btn-ghost btn-sm" onclick="backToHistory()">← Volver al historial</button>'
+    + '</div>'
+    + '<div class="combined-days">' + chipsHtml + '</div>'
+    + renderResult(agents, sessionCountTotal);
+  combinedView.style.display = 'block';
+  // Scroll to top
+  document.querySelector('.main').scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function backToHistory() {
+  document.getElementById('historyList').style.display = '';
+  document.getElementById('histBarWrap').style.display = '';
+  document.getElementById('combinedView').style.display = 'none';
+  updateSelection(); // Re-show select bar if there's still a selection
 }
 </script>
 </body>
