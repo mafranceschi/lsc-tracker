@@ -2127,150 +2127,196 @@ function generateSalaryExcel() {
 
   var wb = XLSX.utils.book_new();
 
-  // Recalculate eow for export
+  // Employee of the week = non-fired employee with most minutes
   var eow = null, maxMins = -1;
   for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
-    if (!FIRED_STORE[SALARY_ROWS_STORE[i].emp.id] && SALARY_ROWS_STORE[i].totalMins > maxMins) {
-      maxMins = SALARY_ROWS_STORE[i].totalMins; eow = SALARY_ROWS_STORE[i].emp.id;
-    }
+    var _r = SALARY_ROWS_STORE[i];
+    if (!FIRED_STORE[_r.emp.id] && _r.totalMins > maxMins) { maxMins = _r.totalMins; eow = _r.emp.id; }
   }
 
-  // Colors (RGB hex, 6 chars)
-  var CLR_GREEN_LT = '92D050'; // reached minimum
-  var CLR_GREEN_DK = '00B050'; // promoted
-  var CLR_YELLOW   = 'FFD966'; // recently joined / employee of week
-  var CLR_ORANGE   = 'FF9966'; // didn't reach minimum
-  var CLR_RED      = 'FF4444'; // fired
+  // ── Colors matching reference Excel exactly ────────────────────────────
+  var CLR_GREEN_LT   = 'A9D18E'; // reached minimum
+  var CLR_GREEN_DK   = '375623'; // promoted / employee of week
+  var CLR_YELLOW     = 'FFC000'; // recently joined
+  var CLR_ORANGE     = 'ED7D31'; // didn't reach minimum
+  var CLR_RED        = 'FF0000'; // fired
+  var CLR_HEADER     = 'B7B7B7'; // column header row (gray)
+  var CLR_BLACK      = '000000'; // separator rows
+  var CLR_WHITE      = 'FFFFFF'; // left margin column
+  var CLR_BILLING    = 'FFE699'; // FACTURACION section headers (yellow)
+  var CLR_ECON       = 'C5E0B4'; // ECONOMIA ANTERIOR header (light green)
 
-  var textDark  = '1A1A1A';
-  var textLight = 'FFFFFF';
+  var BD = { style: 'thin', color: { rgb: 'BBBBBB' } };
+  var BORDER = { top: BD, bottom: BD, left: BD, right: BD };
 
-  function mkCell(v, fillRgb, bold, align) {
-    var c = { v: v, t: typeof v === 'number' ? 'n' : 's' };
-    var darkFill = fillRgb === CLR_RED || fillRgb === CLR_GREEN_DK;
+  function isDark(rgb) { return rgb === CLR_GREEN_DK || rgb === CLR_RED || rgb === CLR_BLACK; }
+
+  function mkCell(v, fill, bold, align) {
+    var c = { v: (v !== null && v !== undefined) ? v : '', t: typeof v === 'number' ? 'n' : 's' };
     c.s = {
-      font:  { bold: !!bold, color: { rgb: darkFill ? textLight : textDark } },
+      font: { bold: !!bold, color: { rgb: isDark(fill) ? 'FFFFFF' : '000000' }, name: 'Calibri', sz: 11 },
       alignment: { horizontal: align || 'left', vertical: 'center', wrapText: false },
-      border: {
-        top:    { style: 'thin', color: { rgb: 'BBBBBB' } },
-        bottom: { style: 'thin', color: { rgb: 'BBBBBB' } },
-        left:   { style: 'thin', color: { rgb: 'BBBBBB' } },
-        right:  { style: 'thin', color: { rgb: 'BBBBBB' } }
-      }
+      border: BORDER
     };
-    if (fillRgb) {
-      c.s.fill = { patternType: 'solid', fgColor: { rgb: fillRgb } };
-    }
+    if (fill) c.s.fill = { patternType: 'solid', fgColor: { rgb: fill } };
     return c;
   }
 
-  // Header row
-  var headers = ['COMENTARIOS', '', 'MECANICOS', 'SERVICIO IC', 'SUELDO', 'AUSENCIA', 'IDENTIFIER'];
-  var hdrRgb = '2D2D4A';
-  var headerRow = headers.map(function(h) {
-    return {
-      v: h, t: 's',
-      s: {
-        fill:  { patternType: 'solid', fgColor: { rgb: hdrRgb } },
-        font:  { bold: true, color: { rgb: 'FFFFFF' } },
-        alignment: { horizontal: 'center', vertical: 'center' },
-        border: {
-          top:    { style: 'thin', color: { rgb: '555577' } },
-          bottom: { style: 'thin', color: { rgb: '555577' } },
-          left:   { style: 'thin', color: { rgb: '555577' } },
-          right:  { style: 'thin', color: { rgb: '555577' } }
-        }
-      }
-    };
-  });
+  function mkEmpty(fill) {
+    var c = { v: '', t: 's' };
+    if (fill) c.s = { fill: { patternType: 'solid', fgColor: { rgb: fill } } };
+    return c;
+  }
 
-  var wsData = [headerRow];
+  // ── Row 1: Column headers ──────────────────────────────────────────────
+  // Columns: A=margin, B=COMENTARIOS, C=MECANICOS, D=SERVICIO IC, E=SUELDO, F=AUSENCIA, G=IDENTIFIER
+  function mkHdr(txt) {
+    return { v: txt, t: 's', s: {
+      fill: { patternType: 'solid', fgColor: { rgb: CLR_HEADER } },
+      font: { bold: true, color: { rgb: '000000' }, name: 'Calibri', sz: 11 },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: BORDER
+    }};
+  }
+  var wsData = [[
+    mkEmpty(CLR_WHITE),
+    mkHdr('COMENTARIOS'), mkHdr('MECANICOS'), mkHdr('SERVICIO IC'),
+    mkHdr('SUELDO'), mkHdr('AUSENCIA'), mkHdr('IDENTIFIER')
+  ]];
+
+  // ── Employee rows ──────────────────────────────────────────────────────
+  var RANK_SHORT = { director:'DIR', jefe:'JEF', subjefe:'SUB', ingeniero:'ING', experimentado:'EXP' };
+  var totalSalary = 0, empCount = 0;
 
   for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
     var r = SALARY_ROWS_STORE[i], e = r.emp;
     var fired    = !!FIRED_STORE[e.id];
     var promoted = !!PROMOTED_STORE[e.id];
-    var isEow    = (e.id === eow);
+    var isEow    = (!fired && e.id === eow);
     var isRecent = isRecentEmployee(e);
-
     var reachedMin = r.salary > 0;
     var noReach    = !reachedMin && r.totalMins > 0;
 
-    // Row fill color priority: fired > promoted/eow(dk green) > recent(yellow) > reached min(lt green) > no reach(orange)
-    var fillRgb = null;
-    if (fired)              fillRgb = CLR_RED;
-    else if (promoted||isEow) fillRgb = CLR_GREEN_DK;
-    else if (isRecent)      fillRgb = CLR_YELLOW;
-    else if (reachedMin)    fillRgb = CLR_GREEN_LT;
-    else if (noReach)       fillRgb = CLR_ORANGE;
+    var fill = null;
+    if (fired)                fill = CLR_RED;
+    else if (promoted||isEow) fill = CLR_GREEN_DK;
+    else if (isRecent)        fill = CLR_YELLOW;
+    else if (reachedMin)      fill = CLR_GREEN_LT;
+    else if (noReach)         fill = CLR_ORANGE;
 
-    // All session minutes go to SERVICIO IC
+    // SERVICIO IC hours
     var icMins = 0;
-    for (var k = 0; k < r.sessions.length; k++) { icMins += r.sessions[k].mins; }
+    for (var k = 0; k < r.sessions.length; k++) icMins += r.sessions[k].mins;
     var icStr = icMins > 0 ? fmtTime(icMins).str : '';
 
-    // Rank prefix: use short label
-    var RANK_SHORT = { director:'DIR', jefe:'JEF', subjefe:'SUB', ingeniero:'ING', experimentado:'EXP' };
-    var shortLabel = RANK_SHORT[e.rango] || (e.rango||'').toUpperCase().slice(0,3);
-    var mechStr = '[' + shortLabel + '] ' + e.nombre;
+    // Name with rank prefix
+    var sl = RANK_SHORT[e.rango] || (e.rango||'').toUpperCase().slice(0,3);
+    var mechStr = '[' + sl + '] ' + e.nombre;
 
-    // COMENTARIOS: descriptive text matching reference
+    // COMENTARIOS text (match reference casing)
     var comentario = '';
-    if (fired)         comentario = 'DESPEDIDO (REINGRESO PROHIBIDO)';
-    else if (promoted) comentario = 'ASCENSO';
-    else if (isEow)    comentario = 'EMPLEADO DE LA SEMANA';
-    else if (isRecent) comentario = 'INGRESO RECIENTE.';
-    else if (noReach)  comentario = 'NO LLEGO A LA MÍNIMA DAR AVISO';
+    if (fired)         comentario = 'Despedido ( REINGRESO PROHIBIDO )';
+    else if (promoted) comentario = 'Ascenso';
+    else if (isEow)    comentario = 'Empleado de la semana';
+    else if (isRecent) comentario = 'Ingreso Reciente.';
+    else if (noReach)  comentario = 'No llego a la minima dar aviso';
 
-    var row = [
-      mkCell(comentario, fillRgb, true, 'left'),
-      mkCell('', fillRgb, false, 'center'),
-      mkCell(mechStr, fillRgb, false, 'left'),
-      mkCell(icStr, fillRgb, false, 'center'),
-      mkCell(fired ? '' : (reachedMin ? r.salary + 'M' : ''), fillRgb, reachedMin, 'center'),
-      mkCell('', fillRgb, false, 'center'),
-      mkCell(e.identifier || '', fillRgb, false, 'left')
-    ];
-    wsData.push(row);
+    if (!fired) { totalSalary += r.salary; empCount++; }
+    var salStr = fired ? '' : (reachedMin ? r.salary + 'M' : '');
+
+    wsData.push([
+      mkEmpty(CLR_WHITE),
+      mkCell(comentario, fill, !!comentario, 'left'),
+      mkCell(mechStr,    fill, false, 'left'),
+      mkCell(icStr,      fill, false, 'center'),
+      mkCell(salStr,     fill, reachedMin, 'center'),
+      mkCell('',         fill, false, 'center'),
+      mkCell(e.identifier || '', fill, false, 'left')
+    ]);
   }
 
-  // Total row
-  var totalSalary = SALARY_ROWS_STORE.reduce(function(s, r) { return FIRED_STORE[r.emp.id] ? s : s + r.salary; }, 0);
-  var totalRgb = '1E1E3A';
-  function mkTotal(v, bold) {
+  // ── 3 black separator rows ─────────────────────────────────────────────
+  for (var j = 0; j < 3; j++) {
+    wsData.push([
+      mkEmpty(CLR_WHITE),
+      mkEmpty(CLR_BLACK), mkEmpty(CLR_BLACK), mkEmpty(CLR_BLACK),
+      mkEmpty(CLR_BLACK), mkEmpty(CLR_BLACK), mkEmpty(CLR_BLACK)
+    ]);
+  }
+
+  // ── Summary row ───────────────────────────────────────────────────────
+  function mkSum(v, bright) {
     return { v: v||'', t: 's', s: {
-      fill: { patternType:'solid', fgColor:{ rgb: totalRgb } },
-      font: { bold: !!bold, color:{ rgb: bold ? 'B9F6CA' : 'FFFFFF' } },
-      alignment: { horizontal:'center', vertical:'center' }
+      fill: { patternType:'solid', fgColor:{ rgb: CLR_BLACK } },
+      font: { bold: !!bright, color:{ rgb: bright ? 'C0C0C0' : '666666' }, name:'Calibri', sz:11 }
     }};
   }
-  var totalRow = [
-    mkTotal('TOTAL', false), mkTotal(''), mkTotal(''), mkTotal(''),
-    mkTotal(totalSalary + 'M', true), mkTotal(''), mkTotal('')
-  ];
-  wsData.push(totalRow);
+  wsData.push([
+    mkEmpty(CLR_WHITE),
+    mkSum(''), mkSum('Total Empleados: ' + empCount, true), mkSum(''),
+    mkSum('Total Sueldos:' + totalSalary + 'M', true), mkSum(''), mkSum('')
+  ]);
 
+  // ── 2 empty rows gap ──────────────────────────────────────────────────
+  wsData.push(new Array(7).fill({ v: '', t: 's' }));
+  wsData.push(new Array(7).fill({ v: '', t: 's' }));
+
+  // ── FACTURACION SEMANAL section ───────────────────────────────────────
+  function mkBill(v, bold) {
+    return { v: v||'', t: 's', s: {
+      fill: { patternType:'solid', fgColor:{ rgb: CLR_BILLING } },
+      font: { bold: !!bold, color:{ rgb: '000000' }, name:'Calibri', sz:11 },
+      alignment: { horizontal:'left', vertical:'center' }
+    }};
+  }
+  wsData.push([
+    mkBill('MES', true), mkBill('FACTURACION SEMANAL.', true), mkBill('GANANCIA SEMANAL.', true),
+    mkEmpty(CLR_BLACK),
+    mkBill('TOTAL SUELDOS.', true), mkBill('TOTAL EN SOCIEDAD.', true),
+    { v:'', t:'s' }
+  ]);
+
+  // Current month pre-filled with total sueldos
+  var MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var now = new Date();
+  wsData.push([
+    { v: MESES[now.getMonth()], t:'s' }, { v:'', t:'s' }, { v:'', t:'s' }, { v:'', t:'s' },
+    { v: totalSalary + 'M', t:'s' }, { v:'', t:'s' }, { v:'', t:'s' }
+  ]);
+  for (var j = 0; j < 5; j++) wsData.push(new Array(7).fill({ v:'', t:'s' }));
+
+  // ── ECONOMIA ANTERIOR section ─────────────────────────────────────────
+  function mkEcon(v, bold) {
+    return { v: v||'', t:'s', s: {
+      fill: { patternType:'solid', fgColor:{ rgb: CLR_ECON } },
+      font: { bold: !!bold, color:{ rgb:'000000' }, name:'Calibri', sz:11 }
+    }};
+  }
+  wsData.push([
+    mkEcon(''), mkEcon('ECONOMIA ANTERIOR.', true), mkEcon(''), mkEcon(''),
+    mkEcon(''), mkEcon(''), { v:'', t:'s' }
+  ]);
+  for (var j = 0; j < 4; j++) wsData.push(new Array(7).fill({ v:'', t:'s' }));
+
+  // ── Build sheet ────────────────────────────────────────────────────────
   var ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Column widths
   ws['!cols'] = [
-    { wch: 18 }, // COMENTARIOS
-    { wch: 3  }, // blank
-    { wch: 28 }, // MECANICOS
-    { wch: 14 }, // SERVICIO IC
-    { wch: 12 }, // SUELDO
-    { wch: 10 }, // AUSENCIA
-    { wch: 22 }  // IDENTIFIER
+    { wch: 5  }, // A: margin
+    { wch: 32 }, // B: COMENTARIOS
+    { wch: 30 }, // C: MECANICOS
+    { wch: 14 }, // D: SERVICIO IC
+    { wch: 14 }, // E: SUELDO
+    { wch: 10 }, // F: AUSENCIA
+    { wch: 45 }  // G: IDENTIFIER
   ];
 
-  // Row heights
-  ws['!rows'] = [{ hpt: 22 }]; // header
-  for (var i = 0; i < SALARY_ROWS_STORE.length; i++) ws['!rows'].push({ hpt: 20 });
-  ws['!rows'].push({ hpt: 22 }); // total
+  // Row heights: header + employees + rest
+  ws['!rows'] = [{ hpt: 18 }];
+  for (var i = 0; i < SALARY_ROWS_STORE.length; i++) ws['!rows'].push({ hpt: 18 });
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Liquidación');
+  XLSX.utils.book_append_sheet(wb, ws, 'Liquidacion');
 
-  // Build filename with today's date
   var d = new Date();
   var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   XLSX.writeFile(wb, 'liquidacion-' + ds + '.xlsx');
