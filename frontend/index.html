@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LSC · Tracker de Servicio</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="/xlsx-js-style.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -850,6 +851,15 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
             </select>
             <div id="rankPreview" class="rank-badge r-experimentado" style="margin-top:0.6rem">⭐ Experimentado</div>
           </div>
+          <div class="form-group" style="margin-bottom:1.25rem">
+            <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer">
+              <input type="checkbox" id="empRecentlyJoined" style="accent-color:var(--warn);width:16px;height:16px;flex-shrink:0">
+              <span>
+                <span class="form-label" style="margin:0;display:block">Ingresó recientemente</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--muted)">Se marcará en amarillo en el Excel por 5 días</span>
+              </span>
+            </label>
+          </div>
           <button class="btn-primary" onclick="crearEmpleado()" style="width:100%;justify-content:center;margin-top:0.5rem">
             Crear empleado
           </button>
@@ -1082,9 +1092,10 @@ function updateRankPreview() {
 }
 
 function crearEmpleado() {
-  var nombre     = document.getElementById('empNombre').value.trim();
-  var identifier = document.getElementById('empIdentifier').value.trim();
-  var rango      = document.getElementById('empRango').value;
+  var nombre          = document.getElementById('empNombre').value.trim();
+  var identifier      = document.getElementById('empIdentifier').value.trim();
+  var rango           = document.getElementById('empRango').value;
+  var recentlyJoined  = document.getElementById('empRecentlyJoined').checked;
 
   if (!nombre) {
     document.getElementById('empNombre').focus();
@@ -1097,7 +1108,7 @@ function crearEmpleado() {
   fetch('/api/empleados', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ nombre: nombre, identifier: identifier, rango: rango })
+    body: JSON.stringify({ nombre: nombre, identifier: identifier, rango: rango, recently_joined: recentlyJoined })
   })
   .then(function(r) {
     if (r.status === 401) { handleUnauth(crearEmpleado); return null; }
@@ -1109,11 +1120,27 @@ function crearEmpleado() {
     document.getElementById('empNombre').value = '';
     document.getElementById('empIdentifier').value = '';
     document.getElementById('empRango').value = 'experimentado';
+    document.getElementById('empRecentlyJoined').checked = false;
     updateRankPreview();
     showToast('✅ ' + data.empleado.nombre + ' creado como ' + RANK_CONFIG[rango].label, 'ok');
   })
   .catch(function() { showToast('❌ Error al conectar con el servidor', 'err'); })
   .finally(function() { btn.disabled = false; btn.textContent = 'Crear empleado'; });
+}
+
+function toggleRecentEmployee(id, setRecent) {
+  fetch('/api/empleados/' + id, {
+    method: 'PUT',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, apiHeaders()),
+    body: JSON.stringify({ recently_joined: setRecent })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+    showToast(setRecent ? '🕐 Marcado como ingreso reciente' : 'Ingreso reciente quitado', 'ok');
+    renderEmpleados();
+  })
+  .catch(function() { showToast('❌ Error al actualizar', 'err'); });
 }
 
 function cambiarRango(id, nuevoRango) {
@@ -1172,7 +1199,7 @@ function renderEmpleados() {
     ];
 
     var html = '<div class="emp-table-wrap"><table class="emp-table"><thead><tr>'
-      + '<th>Empleado</th><th>Identifier</th><th>Rango</th><th>Desde</th><th></th>'
+      + '<th>Empleado</th><th>Identifier</th><th>Rango</th><th>Reciente</th><th>Desde</th><th></th>'
       + '</tr></thead><tbody>';
 
     for (var i = 0; i < empleados.length; i++) {
@@ -1189,6 +1216,17 @@ function renderEmpleados() {
         rankOpts += '<option value="' + r + '"' + (r === e.rango ? ' selected' : '') + '>' + RANK_CONFIG[r].label + '</option>';
       });
 
+      // Check if recently joined (within 5 days)
+      var isRecent = e.recently_joined_at &&
+        (Date.now() - new Date(e.recently_joined_at).getTime()) <= 5 * 24 * 60 * 60 * 1000;
+      var recentBtn = isRecent
+        ? '<button class="btn-sm" onclick="toggleRecentEmployee(' + e.id + ', false)" '
+          + 'style="font-size:0.65rem;padding:0.15rem 0.5rem;background:rgba(255,217,102,0.15);color:#d4a017;border-color:rgba(255,217,102,0.4)" '
+          + 'title="Quitar ingreso reciente">🕐 Reciente</button>'
+        : '<button class="btn-sm" onclick="toggleRecentEmployee(' + e.id + ', true)" '
+          + 'style="font-size:0.65rem;padding:0.15rem 0.5rem;color:var(--muted);border-color:rgba(255,255,255,0.08)" '
+          + 'title="Marcar como ingreso reciente">+ Reciente</button>';
+
       html += '<tr>'
         + '<td><div class="emp-name-cell">'
         + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + '">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
@@ -1196,6 +1234,7 @@ function renderEmpleados() {
         + '</div></td>'
         + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;color:var(--muted)">' + esc(sid) + '</span></td>'
         + '<td><select class="rank-select-inline" onchange="cambiarRango(' + e.id + ', this.value)">' + rankOpts + '</select></td>'
+        + '<td>' + recentBtn + '</td>'
         + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.65rem;color:var(--muted)">' + fecha + '</span></td>'
         + '<td><button class="btn-icon" onclick="eliminarEmpleado(' + e.id + ',\'' + esc(e.nombre) + '\')" title="Eliminar">✕</button></td>'
         + '</tr>';
@@ -1518,6 +1557,9 @@ var SALARY_CONFIG      = [];
 var SALARY_LOG_DATA_S  = [];
 var selectedSalaryLogs = {};
 var UNMATCHED_STORE    = []; // agentes sin empleado del último cálculo
+var SALARY_ROWS_STORE  = []; // filas del último cálculo (para Excel)
+var FIRED_STORE        = {}; // { empId: true } — despedidos
+var PROMOTED_STORE     = {}; // { empId: true } — ascensos
 
 function loadSalaryTab() {
   loadSalaryConfigFromDB();
@@ -1744,8 +1786,9 @@ function calcularSueldos() {
   for (var i = 0; i < sortedLogs.length; i++) {
     for (var j = 0; j < sortedLogs[i].agents.length; j++) {
       var a = sortedLogs[i].agents[j];
-      if (!agentMap[a.identifier]) agentMap[a.identifier] = { identifier: a.identifier, name: a.name, totalMins: 0 };
+      if (!agentMap[a.identifier]) agentMap[a.identifier] = { identifier: a.identifier, name: a.name, totalMins: 0, sessions: [] };
       agentMap[a.identifier].totalMins += a.totalMins;
+      if (a.sessions) agentMap[a.identifier].sessions = agentMap[a.identifier].sessions.concat(a.sessions);
     }
   }
 
@@ -1777,7 +1820,7 @@ function calcularSueldos() {
         }
         var totalMins = agent ? agent.totalMins : 0;
         var salary    = calcSalaryAmount(emp.rango, totalMins, SALARY_CONFIG);
-        rows.push({ emp: emp, totalMins: totalMins, salary: salary });
+        rows.push({ emp: emp, totalMins: totalMins, salary: salary, sessions: agent ? agent.sessions : [] });
       }
 
       // Find agents with no matching employee (can't calculate salary without rank)
@@ -1796,12 +1839,38 @@ function calcularSueldos() {
     .catch(function() { showToast('❌ Error al cargar empleados', 'err'); });
 }
 
+function isRecentEmployee(emp) {
+  if (!emp.recently_joined_at) return false;
+  return (Date.now() - new Date(emp.recently_joined_at).getTime()) <= 5 * 24 * 60 * 60 * 1000;
+}
+
 function renderSalaryResult(rows, unmatched, logs) {
   var el = document.getElementById('salaryResult');
 
-  rows.sort(function(a, b) { return b.salary - a.salary || b.totalMins - a.totalMins; });
-  var totalSalary = rows.reduce(function(sum, r) { return sum + r.salary; }, 0);
-  var withSalary  = rows.filter(function(r) { return r.salary > 0; }).length;
+  var RANK_ORDER = ['director','jefe','subjefe','ingeniero','experimentado'];
+  rows.sort(function(a, b) {
+    var ra = RANK_ORDER.indexOf(a.emp.rango), rb = RANK_ORDER.indexOf(b.emp.rango);
+    if (ra === -1) ra = RANK_ORDER.length;
+    if (rb === -1) rb = RANK_ORDER.length;
+    if (ra !== rb) return ra - rb;           // mayor rango primero
+    return b.totalMins - a.totalMins;        // dentro del rango: más horas primero
+  });
+
+  // Store for Excel and toggles — preserve existing fired/promoted state if recalculating
+  SALARY_ROWS_STORE = rows;
+  // Reset only for new calculations (clear if rows changed significantly)
+  // Keep FIRED_STORE and PROMOTED_STORE across recalcs so user doesn't lose marks
+
+  // Find employee of the week (most hours, not fired)
+  var eow = null, maxMins = -1;
+  for (var i = 0; i < rows.length; i++) {
+    if (!FIRED_STORE[rows[i].emp.id] && rows[i].totalMins > maxMins) {
+      maxMins = rows[i].totalMins; eow = rows[i].emp.id;
+    }
+  }
+
+  var totalSalary = rows.reduce(function(sum, r) { return FIRED_STORE[r.emp.id] ? sum : sum + r.salary; }, 0);
+  var withSalary  = rows.filter(function(r) { return !FIRED_STORE[r.emp.id] && r.salary > 0; }).length;
 
   var COLORS_L = [
     ['rgba(139,92,246,0.15)','#c4b5fd'],['rgba(34,211,238,0.15)','#67e8f9'],
@@ -1809,17 +1878,20 @@ function renderSalaryResult(rows, unmatched, logs) {
     ['rgba(16,185,129,0.15)','#6ee7b7'],['rgba(236,72,153,0.15)','#f9a8d4'],
   ];
 
-  // Day chips
   var chipsHtml = logs.map(function(l) {
     return '<span class="day-chip">📅 ' + esc(fmtDate(l.savedAt)) + '</span>';
   }).join('');
 
   var html = '<div class="section-card">'
     + '<div class="section-card-title">03 · Resultado</div>'
-    + '<div class="section-card-head" style="margin-bottom:0.75rem">Liquidación semanal</div>'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:0.75rem">'
+    + '<span class="section-card-head" style="margin:0">Liquidación semanal</span>'
+    + '<button class="btn-primary btn-sm" onclick="generateSalaryExcel()" style="gap:0.4rem">⬇ Descargar Excel</button>'
+    + '</div>'
     + '<div class="combined-days" style="margin-bottom:1.25rem">' + chipsHtml + '</div>'
+    + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:var(--muted);margin-bottom:0.75rem">Usá ↑ y ✕ para marcar ascensos/despidos antes de descargar</div>'
     + '<div class="emp-table-wrap"><table class="salary-table"><thead><tr>'
-    + '<th>Empleado</th><th>Rango</th><th>Horas semana</th><th>Sueldo</th>'
+    + '<th>Empleado</th><th>Rango</th><th>Horas semana</th><th>Sueldo</th><th style="width:90px;text-align:center">Ascenso</th><th style="width:90px;text-align:center">Despedido</th>'
     + '</tr></thead><tbody>';
 
   for (var i = 0; i < rows.length; i++) {
@@ -1829,24 +1901,34 @@ function renderSalaryResult(rows, unmatched, logs) {
     var t   = fmtTime(r.totalMins);
     var sid = e.identifier ? (e.identifier.length > 14 ? e.identifier.slice(0,7)+'…'+e.identifier.slice(-7) : e.identifier) : '';
 
-    var salaryTxt, salaryCls;
-    if (r.salary > 0) {
-      salaryTxt = r.salary + 'M'; salaryCls = '';
-    } else if (r.totalMins === 0) {
-      salaryTxt = '— sin horas'; salaryCls = 'zero';
-    } else {
-      salaryTxt = '— no alcanza mín.'; salaryCls = 'zero';
-    }
+    // Determine row background
+    var rowBg = '';
+    if (FIRED_STORE[e.id])          rowBg = 'background:rgba(239,68,68,0.08)';
+    else if (PROMOTED_STORE[e.id])  rowBg = 'background:rgba(0,176,80,0.1)';
+    else if (e.id === eow)          rowBg = 'background:rgba(0,176,80,0.07)';
+    else if (isRecentEmployee(e))   rowBg = 'background:rgba(255,217,102,0.08)';
+    else if (r.salary > 0)          rowBg = 'background:rgba(146,208,80,0.06)';
 
-    html += '<tr>'
+    var salaryTxt, salaryCls;
+    if (FIRED_STORE[e.id])  { salaryTxt = '— despedido'; salaryCls = 'zero'; }
+    else if (r.salary > 0)  { salaryTxt = r.salary + 'M'; salaryCls = ''; }
+    else if (r.totalMins === 0) { salaryTxt = '— sin horas'; salaryCls = 'zero'; }
+    else { salaryTxt = '— no alcanza mín.'; salaryCls = 'zero'; }
+
+    var ascActive  = !!PROMOTED_STORE[e.id];
+    var fireActive = !!FIRED_STORE[e.id];
+
+    html += '<tr id="sal-row-' + e.id + '" style="' + rowBg + '">'
       + '<td><div class="emp-name-cell">'
       + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + '">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
-      + '<div><div class="emp-name">' + esc(e.nombre) + '</div>'
+      + '<div><div class="emp-name">' + esc(e.nombre) + (e.id === eow ? ' <span style="font-size:0.6rem;color:#00b050">★ semana</span>' : '') + (isRecentEmployee(e) ? ' <span style="font-size:0.6rem;color:#ffd966">● nuevo</span>' : '') + '</div>'
       + (sid ? '<div class="emp-id-small">' + esc(sid) + '</div>' : '')
       + '</div></div></td>'
       + '<td><span class="rank-badge ' + cfg.cls + '">' + cfg.icon + ' ' + cfg.label + '</span></td>'
       + '<td><span class="salary-hours">' + (r.totalMins > 0 ? t.str : '<span style="color:var(--muted)">—</span>') + '</span></td>'
       + '<td><span class="salary-amount ' + salaryCls + '">' + salaryTxt + '</span></td>'
+      + '<td style="text-align:center"><button id="btn-asc-' + e.id + '" class="btn-icon" onclick="toggleAscenso(' + e.id + ')" title="Marcar ascenso" style="' + (ascActive ? 'color:#00b050;border-color:rgba(0,176,80,0.4);background:rgba(0,176,80,0.08)' : '') + '">↑</button></td>'
+      + '<td style="text-align:center"><button id="btn-fire-' + e.id + '" class="btn-icon" onclick="toggleFired(' + e.id + ')" title="Marcar despedido" style="' + (fireActive ? 'color:var(--danger);border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.06)' : '') + '">✕</button></td>'
       + '</tr>';
   }
   html += '</tbody></table></div>';
@@ -1899,6 +1981,304 @@ function renderSalaryResult(rows, unmatched, logs) {
   el.innerHTML = html;
   el.style.display = 'block';
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Ascenso / Despedido toggles ──────────────────────────────────────────────
+var RANK_NEXT = { experimentado:'ingeniero', ingeniero:'subjefe', subjefe:'jefe', jefe:'director' };
+
+function toggleAscenso(empId) {
+  var wasOn = !!PROMOTED_STORE[empId];
+  PROMOTED_STORE[empId] = !wasOn;
+  if (PROMOTED_STORE[empId]) delete FIRED_STORE[empId];
+  updateSalaryRowStyle(empId);
+
+  // Solo hace el cambio en DB cuando se marca (no cuando se desmarca)
+  if (!wasOn) {
+    var rowData = null;
+    for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
+      if (SALARY_ROWS_STORE[i].emp.id === empId) { rowData = SALARY_ROWS_STORE[i]; break; }
+    }
+    if (!rowData) return;
+    var nextRank = RANK_NEXT[rowData.emp.rango];
+    if (!nextRank) {
+      showToast(rowData.emp.nombre + ' ya es Director, no puede ascender más', 'err');
+      PROMOTED_STORE[empId] = false;
+      updateSalaryRowStyle(empId);
+      return;
+    }
+    fetch('/api/empleados/' + empId, {
+      method: 'PUT',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, apiHeaders()),
+      body: JSON.stringify({ rango: nextRank })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.empleado) {
+        showToast('⬆ ' + data.empleado.nombre + ' ascendido a ' + (RANK_CONFIG[nextRank] ? RANK_CONFIG[nextRank].label : nextRank), 'ok');
+      } else {
+        showToast('❌ Error al ascender: ' + (data.error || ''), 'err');
+      }
+    })
+    .catch(function() { showToast('❌ Error al conectar con el servidor', 'err'); });
+  }
+}
+
+function toggleFired(empId) {
+  var wasOn = !!FIRED_STORE[empId];
+  FIRED_STORE[empId] = !wasOn;
+  if (FIRED_STORE[empId]) delete PROMOTED_STORE[empId];
+  updateSalaryRowStyle(empId);
+  _refreshSalaryTotals();
+
+  // Solo elimina de DB cuando se marca (no cuando se desmarca)
+  if (!wasOn) {
+    var rowData = null;
+    for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
+      if (SALARY_ROWS_STORE[i].emp.id === empId) { rowData = SALARY_ROWS_STORE[i]; break; }
+    }
+    var nombre = rowData ? rowData.emp.nombre : 'Empleado';
+    fetch('/api/empleados/' + empId, {
+      method: 'DELETE',
+      headers: apiHeaders()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.deleted) {
+        showToast('🗑 ' + nombre + ' eliminado de la base de datos', 'ok');
+      } else {
+        showToast('❌ Error al eliminar: ' + (data.error || ''), 'err');
+      }
+    })
+    .catch(function() { showToast('❌ Error al conectar con el servidor', 'err'); });
+  }
+}
+
+function _refreshSalaryTotals() {
+  if (!SALARY_ROWS_STORE.length) return;
+  var totalSalary = SALARY_ROWS_STORE.reduce(function(s, r) { return FIRED_STORE[r.emp.id] ? s : s + r.salary; }, 0);
+  var withSalary  = SALARY_ROWS_STORE.filter(function(r) { return !FIRED_STORE[r.emp.id] && r.salary > 0; }).length;
+  var tv = document.querySelector('.total-box-value');
+  var ts = document.querySelector('.total-box-sub');
+  if (tv) tv.textContent = totalSalary + 'M';
+  if (ts) ts.textContent = withSalary + ' empleado' + (withSalary !== 1 ? 's' : '') + ' con sueldo · ' + SALARY_ROWS_STORE.length + ' total';
+}
+
+function updateSalaryRowStyle(empId) {
+  var row      = document.getElementById('sal-row-' + empId);
+  var btnAsc   = document.getElementById('btn-asc-' + empId);
+  var btnFire  = document.getElementById('btn-fire-' + empId);
+  var salSpan  = row ? row.querySelector('.salary-amount') : null;
+  if (!row) return;
+
+  // Find the row data
+  var rowData = null;
+  for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
+    if (SALARY_ROWS_STORE[i].emp.id === empId) { rowData = SALARY_ROWS_STORE[i]; break; }
+  }
+  if (!rowData) return;
+
+  var e = rowData.emp;
+  // Recalculate eow
+  var eow = null, maxMins = -1;
+  for (var j = 0; j < SALARY_ROWS_STORE.length; j++) {
+    if (!FIRED_STORE[SALARY_ROWS_STORE[j].emp.id] && SALARY_ROWS_STORE[j].totalMins > maxMins) {
+      maxMins = SALARY_ROWS_STORE[j].totalMins; eow = SALARY_ROWS_STORE[j].emp.id;
+    }
+  }
+
+  var fired    = !!FIRED_STORE[empId];
+  var promoted = !!PROMOTED_STORE[empId];
+  var isEow    = (empId === eow);
+  var isRecent = isRecentEmployee(e);
+
+  // Row background (mirrors Excel color priority)
+  var noReachUI = rowData.salary === 0 && rowData.totalMins > 0;
+  if (fired)                   row.style.background = 'rgba(239,68,68,0.10)';
+  else if (promoted || isEow)  row.style.background = 'rgba(0,176,80,0.12)';
+  else if (isRecent)           row.style.background = 'rgba(255,217,102,0.12)';
+  else if (rowData.salary > 0) row.style.background = 'rgba(146,208,80,0.08)';
+  else if (noReachUI)          row.style.background = 'rgba(255,153,102,0.10)';
+  else                         row.style.background = '';
+
+  // Salary text
+  if (salSpan) {
+    if (fired)               { salSpan.textContent = '— despedido'; salSpan.className = 'salary-amount zero'; }
+    else if (rowData.salary > 0) { salSpan.textContent = rowData.salary + 'M'; salSpan.className = 'salary-amount'; }
+    else if (rowData.totalMins === 0) { salSpan.textContent = '— sin horas'; salSpan.className = 'salary-amount zero'; }
+    else                     { salSpan.textContent = '— no alcanza mín.'; salSpan.className = 'salary-amount zero'; }
+  }
+
+  // Toggle button states
+  if (btnAsc) {
+    if (promoted) { btnAsc.style.color='#00b050'; btnAsc.style.borderColor='rgba(0,176,80,0.4)'; btnAsc.style.background='rgba(0,176,80,0.08)'; }
+    else          { btnAsc.style.color=''; btnAsc.style.borderColor=''; btnAsc.style.background=''; }
+  }
+  if (btnFire) {
+    if (fired) { btnFire.style.color='var(--danger)'; btnFire.style.borderColor='rgba(239,68,68,0.4)'; btnFire.style.background='rgba(239,68,68,0.06)'; }
+    else       { btnFire.style.color=''; btnFire.style.borderColor=''; btnFire.style.background=''; }
+  }
+}
+
+// ── Excel export ──────────────────────────────────────────────────────────────
+function generateSalaryExcel() {
+  if (!SALARY_ROWS_STORE.length) { showToast('No hay datos para exportar', 'err'); return; }
+  if (typeof XLSX === 'undefined') { showToast('❌ Librería Excel no cargó. Recargá la página', 'err'); return; }
+  try {
+
+  var wb = XLSX.utils.book_new();
+
+  // Recalculate eow for export
+  var eow = null, maxMins = -1;
+  for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
+    if (!FIRED_STORE[SALARY_ROWS_STORE[i].emp.id] && SALARY_ROWS_STORE[i].totalMins > maxMins) {
+      maxMins = SALARY_ROWS_STORE[i].totalMins; eow = SALARY_ROWS_STORE[i].emp.id;
+    }
+  }
+
+  // Colors (RGB hex, 6 chars)
+  var CLR_GREEN_LT = '92D050'; // reached minimum
+  var CLR_GREEN_DK = '00B050'; // promoted
+  var CLR_YELLOW   = 'FFD966'; // recently joined / employee of week
+  var CLR_ORANGE   = 'FF9966'; // didn't reach minimum
+  var CLR_RED      = 'FF4444'; // fired
+
+  var textDark  = '1A1A1A';
+  var textLight = 'FFFFFF';
+
+  function mkCell(v, fillRgb, bold, align) {
+    var c = { v: v, t: typeof v === 'number' ? 'n' : 's' };
+    var darkFill = fillRgb === CLR_RED || fillRgb === CLR_GREEN_DK;
+    c.s = {
+      font:  { bold: !!bold, color: { rgb: darkFill ? textLight : textDark } },
+      alignment: { horizontal: align || 'left', vertical: 'center', wrapText: false },
+      border: {
+        top:    { style: 'thin', color: { rgb: 'BBBBBB' } },
+        bottom: { style: 'thin', color: { rgb: 'BBBBBB' } },
+        left:   { style: 'thin', color: { rgb: 'BBBBBB' } },
+        right:  { style: 'thin', color: { rgb: 'BBBBBB' } }
+      }
+    };
+    if (fillRgb) {
+      c.s.fill = { patternType: 'solid', fgColor: { rgb: fillRgb } };
+    }
+    return c;
+  }
+
+  // Header row
+  var headers = ['COMENTARIOS', '', 'MECANICOS', 'SERVICIO IC', 'SUELDO', 'AUSENCIA', 'IDENTIFIER'];
+  var hdrRgb = '2D2D4A';
+  var headerRow = headers.map(function(h) {
+    return {
+      v: h, t: 's',
+      s: {
+        fill:  { patternType: 'solid', fgColor: { rgb: hdrRgb } },
+        font:  { bold: true, color: { rgb: 'FFFFFF' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top:    { style: 'thin', color: { rgb: '555577' } },
+          bottom: { style: 'thin', color: { rgb: '555577' } },
+          left:   { style: 'thin', color: { rgb: '555577' } },
+          right:  { style: 'thin', color: { rgb: '555577' } }
+        }
+      }
+    };
+  });
+
+  var wsData = [headerRow];
+
+  for (var i = 0; i < SALARY_ROWS_STORE.length; i++) {
+    var r = SALARY_ROWS_STORE[i], e = r.emp;
+    var fired    = !!FIRED_STORE[e.id];
+    var promoted = !!PROMOTED_STORE[e.id];
+    var isEow    = (e.id === eow);
+    var isRecent = isRecentEmployee(e);
+
+    var reachedMin = r.salary > 0;
+    var noReach    = !reachedMin && r.totalMins > 0;
+
+    // Row fill color priority: fired > promoted/eow(dk green) > recent(yellow) > reached min(lt green) > no reach(orange)
+    var fillRgb = null;
+    if (fired)              fillRgb = CLR_RED;
+    else if (promoted||isEow) fillRgb = CLR_GREEN_DK;
+    else if (isRecent)      fillRgb = CLR_YELLOW;
+    else if (reachedMin)    fillRgb = CLR_GREEN_LT;
+    else if (noReach)       fillRgb = CLR_ORANGE;
+
+    // All session minutes go to SERVICIO IC
+    var icMins = 0;
+    for (var k = 0; k < r.sessions.length; k++) { icMins += r.sessions[k].mins; }
+    var icStr = icMins > 0 ? fmtTime(icMins).str : '';
+
+    // Rank prefix: use short label
+    var RANK_SHORT = { director:'DIR', jefe:'JEF', subjefe:'SUB', ingeniero:'ING', experimentado:'EXP' };
+    var shortLabel = RANK_SHORT[e.rango] || (e.rango||'').toUpperCase().slice(0,3);
+    var mechStr = '[' + shortLabel + '] ' + e.nombre;
+
+    // COMENTARIOS: descriptive text matching reference
+    var comentario = '';
+    if (fired)         comentario = 'DESPEDIDO (REINGRESO PROHIBIDO)';
+    else if (promoted) comentario = 'ASCENSO';
+    else if (isEow)    comentario = 'EMPLEADO DE LA SEMANA';
+    else if (isRecent) comentario = 'INGRESO RECIENTE.';
+    else if (noReach)  comentario = 'NO LLEGO A LA MÍNIMA DAR AVISO';
+
+    var row = [
+      mkCell(comentario, fillRgb, true, 'left'),
+      mkCell('', fillRgb, false, 'center'),
+      mkCell(mechStr, fillRgb, false, 'left'),
+      mkCell(icStr, fillRgb, false, 'center'),
+      mkCell(fired ? '' : (reachedMin ? r.salary + 'M' : ''), fillRgb, reachedMin, 'center'),
+      mkCell('', fillRgb, false, 'center'),
+      mkCell(e.identifier || '', fillRgb, false, 'left')
+    ];
+    wsData.push(row);
+  }
+
+  // Total row
+  var totalSalary = SALARY_ROWS_STORE.reduce(function(s, r) { return FIRED_STORE[r.emp.id] ? s : s + r.salary; }, 0);
+  var totalRgb = '1E1E3A';
+  function mkTotal(v, bold) {
+    return { v: v||'', t: 's', s: {
+      fill: { patternType:'solid', fgColor:{ rgb: totalRgb } },
+      font: { bold: !!bold, color:{ rgb: bold ? 'B9F6CA' : 'FFFFFF' } },
+      alignment: { horizontal:'center', vertical:'center' }
+    }};
+  }
+  var totalRow = [
+    mkTotal('TOTAL', false), mkTotal(''), mkTotal(''), mkTotal(''),
+    mkTotal(totalSalary + 'M', true), mkTotal(''), mkTotal('')
+  ];
+  wsData.push(totalRow);
+
+  var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 18 }, // COMENTARIOS
+    { wch: 3  }, // blank
+    { wch: 28 }, // MECANICOS
+    { wch: 14 }, // SERVICIO IC
+    { wch: 12 }, // SUELDO
+    { wch: 10 }, // AUSENCIA
+    { wch: 22 }  // IDENTIFIER
+  ];
+
+  // Row heights
+  ws['!rows'] = [{ hpt: 22 }]; // header
+  for (var i = 0; i < SALARY_ROWS_STORE.length; i++) ws['!rows'].push({ hpt: 20 });
+  ws['!rows'].push({ hpt: 22 }); // total
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Liquidación');
+
+  // Build filename with today's date
+  var d = new Date();
+  var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  XLSX.writeFile(wb, 'liquidacion-' + ds + '.xlsx');
+  showToast('✅ Excel descargado', 'ok');
+  } catch(err) {
+    showToast('❌ Error al generar Excel: ' + err.message, 'err');
+    console.error('generateSalaryExcel error:', err);
+  }
 }
 
 // Agregar empleado desde el resultado de sueldos

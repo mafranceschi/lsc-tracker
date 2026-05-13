@@ -94,8 +94,9 @@ if (ENABLE_DB) {
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       nombre     TEXT NOT NULL,
       identifier TEXT,
-      rango      TEXT NOT NULL DEFAULT 'experimentado',
-      created_at TEXT NOT NULL
+      rango              TEXT NOT NULL DEFAULT 'experimentado',
+      recently_joined_at TEXT,
+      created_at         TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS salary_config (
@@ -113,6 +114,9 @@ if (ENABLE_DB) {
     CREATE INDEX IF NOT EXISTS idx_empleados_rango   ON empleados(rango);
     CREATE INDEX IF NOT EXISTS idx_salary_rango      ON salary_config(rango);
   `);
+
+  // Migraciones no destructivas — agregan columnas si no existen
+  try { db.exec('ALTER TABLE empleados ADD COLUMN recently_joined_at TEXT'); } catch (_) {}
 
   console.log(`[DB] SQLite activo · ${dbPath} · retención ${RETENTION_DAYS}d · WAL ON · FK ON`);
 } else {
@@ -284,17 +288,18 @@ app.get('/api/empleados', auth, (_req, res) => {
 });
 
 app.post('/api/empleados', auth, (req, res) => {
-  const { nombre, identifier, rango } = req.body;
+  const { nombre, identifier, rango, recently_joined } = req.body;
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'nombre es requerido' });
-  const rangoFinal = rango && RANGOS_VALIDOS.includes(rango) ? rango : 'experimentado';
+  const rangoFinal        = rango && RANGOS_VALIDOS.includes(rango) ? rango : 'experimentado';
+  const recentlyJoinedAt  = recently_joined ? new Date().toISOString() : null;
   if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
   try {
     const now = new Date().toISOString();
     const result = db.prepare(
-      'INSERT INTO empleados (nombre, identifier, rango, created_at) VALUES (?, ?, ?, ?)'
-    ).run(nombre.trim(), identifier ? identifier.trim() : null, rangoFinal, now);
+      'INSERT INTO empleados (nombre, identifier, rango, recently_joined_at, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(nombre.trim(), identifier ? identifier.trim() : null, rangoFinal, recentlyJoinedAt, now);
     const empleado = db.prepare('SELECT * FROM empleados WHERE id = ?').get(result.lastInsertRowid);
-    console.log(`[DB] Empleado #${empleado.id} creado: ${empleado.nombre} (${empleado.rango})`);
+    console.log(`[DB] Empleado #${empleado.id} creado: ${empleado.nombre} (${empleado.rango})${recentlyJoinedAt ? ' [reciente]' : ''}`);
     res.json({ empleado });
   } catch (err) {
     console.error('[DB] Error al crear empleado:', err.message);
@@ -305,16 +310,19 @@ app.post('/api/empleados', auth, (req, res) => {
 app.put('/api/empleados/:id', auth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
-  const { nombre, identifier, rango } = req.body;
+  const { nombre, identifier, rango, recently_joined } = req.body;
   if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
   try {
     const existing = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
     if (!existing) return res.status(404).json({ error: 'Empleado no encontrado' });
-    const nuevoNombre     = nombre     ? nombre.trim()     : existing.nombre;
-    const nuevoIdentifier = identifier !== undefined ? (identifier ? identifier.trim() : null) : existing.identifier;
-    const nuevoRango      = rango && RANGOS_VALIDOS.includes(rango) ? rango : existing.rango;
-    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ? WHERE id = ?')
-      .run(nuevoNombre, nuevoIdentifier, nuevoRango, id);
+    const nuevoNombre          = nombre     ? nombre.trim()     : existing.nombre;
+    const nuevoIdentifier      = identifier !== undefined ? (identifier ? identifier.trim() : null) : existing.identifier;
+    const nuevoRango           = rango && RANGOS_VALIDOS.includes(rango) ? rango : existing.rango;
+    const nuevoRecentlyJoined  = recently_joined === true  ? new Date().toISOString()
+                                : recently_joined === false ? null
+                                : existing.recently_joined_at;
+    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ?, recently_joined_at = ? WHERE id = ?')
+      .run(nuevoNombre, nuevoIdentifier, nuevoRango, nuevoRecentlyJoined, id);
     const updated = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
     res.json({ empleado: updated });
   } catch (err) {
