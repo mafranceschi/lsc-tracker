@@ -82,10 +82,19 @@ if (ENABLE_DB) {
       mins       REAL    NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS empleados (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre     TEXT NOT NULL,
+      identifier TEXT,
+      rango      TEXT NOT NULL DEFAULT 'experimentado',
+      created_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_logs_saved_at     ON logs(saved_at);
     CREATE INDEX IF NOT EXISTS idx_agents_log_id     ON agents(log_id);
     CREATE INDEX IF NOT EXISTS idx_agents_identifier ON agents(identifier);
     CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_empleados_rango   ON empleados(rango);
   `);
 
   console.log(`[DB] SQLite activo · ${dbPath} · retención ${RETENTION_DAYS}d · WAL ON · FK ON`);
@@ -238,6 +247,76 @@ app.get('/api/logs', auth, (_req, res) => {
   } catch (err) {
     console.error('[DB] Error al leer:', err.message);
     res.status(500).json({ error: 'Error interno al leer historial' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  EMPLEADOS
+// ══════════════════════════════════════════════════════════════
+const RANGOS_VALIDOS = ['experimentado', 'ingeniero', 'subjefe', 'jefe', 'director'];
+
+app.get('/api/empleados', auth, (_req, res) => {
+  if (!ENABLE_DB) return res.json({ empleados: [] });
+  try {
+    const rows = db.prepare('SELECT * FROM empleados ORDER BY created_at ASC').all();
+    res.json({ empleados: rows });
+  } catch (err) {
+    console.error('[DB] Error al leer empleados:', err.message);
+    res.status(500).json({ error: 'Error interno al leer empleados' });
+  }
+});
+
+app.post('/api/empleados', auth, (req, res) => {
+  const { nombre, identifier, rango } = req.body;
+  if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'nombre es requerido' });
+  const rangoFinal = rango && RANGOS_VALIDOS.includes(rango) ? rango : 'experimentado';
+  if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
+  try {
+    const now = new Date().toISOString();
+    const result = db.prepare(
+      'INSERT INTO empleados (nombre, identifier, rango, created_at) VALUES (?, ?, ?, ?)'
+    ).run(nombre.trim(), identifier ? identifier.trim() : null, rangoFinal, now);
+    const empleado = db.prepare('SELECT * FROM empleados WHERE id = ?').get(result.lastInsertRowid);
+    console.log(`[DB] Empleado #${empleado.id} creado: ${empleado.nombre} (${empleado.rango})`);
+    res.json({ empleado });
+  } catch (err) {
+    console.error('[DB] Error al crear empleado:', err.message);
+    res.status(500).json({ error: 'Error interno al crear empleado' });
+  }
+});
+
+app.put('/api/empleados/:id', auth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+  const { nombre, identifier, rango } = req.body;
+  if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
+  try {
+    const existing = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Empleado no encontrado' });
+    const nuevoNombre     = nombre     ? nombre.trim()     : existing.nombre;
+    const nuevoIdentifier = identifier !== undefined ? (identifier ? identifier.trim() : null) : existing.identifier;
+    const nuevoRango      = rango && RANGOS_VALIDOS.includes(rango) ? rango : existing.rango;
+    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ? WHERE id = ?')
+      .run(nuevoNombre, nuevoIdentifier, nuevoRango, id);
+    const updated = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
+    res.json({ empleado: updated });
+  } catch (err) {
+    console.error('[DB] Error al actualizar empleado:', err.message);
+    res.status(500).json({ error: 'Error interno al actualizar empleado' });
+  }
+});
+
+app.delete('/api/empleados/:id', auth, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
+  try {
+    const { changes } = db.prepare('DELETE FROM empleados WHERE id = ?').run(id);
+    if (changes === 0) return res.status(404).json({ error: 'Empleado no encontrado' });
+    res.json({ deleted: true, id });
+  } catch (err) {
+    console.error('[DB] Error al eliminar empleado:', err.message);
+    res.status(500).json({ error: 'Error interno al eliminar empleado' });
   }
 });
 

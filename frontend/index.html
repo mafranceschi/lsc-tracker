@@ -897,14 +897,7 @@ function switchTab(name) {
     });
 })();
 
-// ══ EMPLEADOS (localStorage) ══════════════════════
-function getEmpleados() {
-  try { return JSON.parse(localStorage.getItem('lsc_empleados') || '[]'); } catch(e) { return []; }
-}
-function saveEmpleados(arr) {
-  localStorage.setItem('lsc_empleados', JSON.stringify(arr));
-}
-
+// ══ EMPLEADOS (API) ═══════════════════════════════
 function updateRankPreview() {
   var rango = document.getElementById('empRango').value;
   var cfg   = RANK_CONFIG[rango] || RANK_CONFIG.experimentado;
@@ -923,93 +916,122 @@ function crearEmpleado() {
     showToast('El nombre es requerido', 'err'); return;
   }
 
-  var empleados = getEmpleados();
-  var nuevo = {
-    id:         Date.now().toString(),
-    nombre:     nombre,
-    identifier: identifier,
-    rango:      rango,
-    createdAt:  new Date().toISOString(),
-  };
-  empleados.push(nuevo);
-  saveEmpleados(empleados);
+  var btn = document.querySelector('#tab-crear-emp .btn-primary');
+  btn.disabled = true; btn.textContent = 'Guardando...';
 
-  document.getElementById('empNombre').value = '';
-  document.getElementById('empIdentifier').value = '';
-  document.getElementById('empRango').value = 'experimentado';
-  updateRankPreview();
-
-  showToast('✅ ' + nombre + ' creado como ' + RANK_CONFIG[rango].label, 'ok');
+  fetch('/api/empleados', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ nombre: nombre, identifier: identifier, rango: rango })
+  })
+  .then(function(r) {
+    if (r.status === 401) { handleUnauth(crearEmpleado); return null; }
+    return r.json();
+  })
+  .then(function(data) {
+    if (!data) return;
+    if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+    document.getElementById('empNombre').value = '';
+    document.getElementById('empIdentifier').value = '';
+    document.getElementById('empRango').value = 'experimentado';
+    updateRankPreview();
+    showToast('✅ ' + data.empleado.nombre + ' creado como ' + RANK_CONFIG[rango].label, 'ok');
+  })
+  .catch(function() { showToast('❌ Error al conectar con el servidor', 'err'); })
+  .finally(function() { btn.disabled = false; btn.textContent = 'Crear empleado'; });
 }
 
 function cambiarRango(id, nuevoRango) {
-  var empleados = getEmpleados();
-  for (var i = 0; i < empleados.length; i++) {
-    if (empleados[i].id === id) { empleados[i].rango = nuevoRango; break; }
-  }
-  saveEmpleados(empleados);
-  renderEmpleados();
+  fetch('/api/empleados/' + id, {
+    method: 'PUT',
+    headers: apiHeaders(),
+    body: JSON.stringify({ rango: nuevoRango })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) showToast('❌ ' + data.error, 'err');
+  })
+  .catch(function() { showToast('❌ Error al actualizar', 'err'); renderEmpleados(); });
 }
 
 function eliminarEmpleado(id, nombre) {
   if (!confirm('¿Eliminar a ' + nombre + '?')) return;
-  var empleados = getEmpleados().filter(function(e) { return e.id !== id; });
-  saveEmpleados(empleados);
-  renderEmpleados();
-  showToast('Empleado eliminado', '');
+  fetch('/api/empleados/' + id, { method: 'DELETE', headers: apiHeaders() })
+  .then(function(r) {
+    if (r.status === 401) { handleUnauth(function(){}); return null; }
+    return r.json();
+  })
+  .then(function(data) {
+    if (!data) return;
+    if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+    showToast('Empleado eliminado', '');
+    renderEmpleados();
+  })
+  .catch(function() { showToast('❌ Error al eliminar', 'err'); });
 }
 
 function renderEmpleados() {
-  var wrap = document.getElementById('empTableWrap');
+  var wrap  = document.getElementById('empTableWrap');
   var badge = document.getElementById('empBadge');
-  var empleados = getEmpleados();
+  wrap.innerHTML = '<div class="empty"><span class="icon">⏳</span><p>Cargando...</p></div>';
 
-  badge.textContent = empleados.length + ' empleado' + (empleados.length !== 1 ? 's' : '');
+  fetch('/api/empleados', { headers: apiHeaders() })
+  .then(function(r) {
+    if (r.status === 401) { handleUnauth(renderEmpleados); return null; }
+    return r.json();
+  })
+  .then(function(data) {
+    if (!data) return;
+    var empleados = data.empleados || [];
+    badge.textContent = empleados.length + ' empleado' + (empleados.length !== 1 ? 's' : '');
 
-  if (empleados.length === 0) {
-    wrap.innerHTML = '<div class="empty"><span class="icon">👥</span><p>No hay empleados registrados.<br>Creá el primero desde <strong>Crear empleado</strong>.</p></div>';
-    return;
-  }
+    if (empleados.length === 0) {
+      wrap.innerHTML = '<div class="empty"><span class="icon">👥</span><p>No hay empleados registrados.<br>Creá el primero desde <strong>Crear empleado</strong>.</p></div>';
+      return;
+    }
 
-  var html = '<div class="emp-table-wrap"><table class="emp-table"><thead><tr>'
-    + '<th>Empleado</th><th>Identifier</th><th>Rango</th><th>Desde</th><th></th>'
-    + '</tr></thead><tbody>';
+    var colorPairs = [
+      ['rgba(139,92,246,0.15)','#c4b5fd'],['rgba(34,211,238,0.15)','#67e8f9'],
+      ['rgba(245,158,11,0.15)','#fcd34d'],['rgba(239,68,68,0.15)','#fca5a5'],
+      ['rgba(16,185,129,0.15)','#6ee7b7'],['rgba(236,72,153,0.15)','#f9a8d4'],
+    ];
 
-  var colorPairs = [
-    ['rgba(139,92,246,0.15)','#c4b5fd'],['rgba(34,211,238,0.15)','#67e8f9'],
-    ['rgba(245,158,11,0.15)','#fcd34d'],['rgba(239,68,68,0.15)','#fca5a5'],
-    ['rgba(16,185,129,0.15)','#6ee7b7'],['rgba(236,72,153,0.15)','#f9a8d4'],
-  ];
+    var html = '<div class="emp-table-wrap"><table class="emp-table"><thead><tr>'
+      + '<th>Empleado</th><th>Identifier</th><th>Rango</th><th>Desde</th><th></th>'
+      + '</tr></thead><tbody>';
 
-  for (var i = 0; i < empleados.length; i++) {
-    var e   = empleados[i];
-    var cfg = RANK_CONFIG[e.rango] || RANK_CONFIG.experimentado;
-    var col = colorPairs[i % colorPairs.length];
-    var d   = new Date(e.createdAt);
-    var fecha = d.getDate() + '/' + (d.getMonth()+1) + '/' + d.getFullYear();
-    var sid = e.identifier
-      ? (e.identifier.length > 14 ? e.identifier.slice(0,7) + '…' + e.identifier.slice(-7) : e.identifier)
-      : '—';
+    for (var i = 0; i < empleados.length; i++) {
+      var e   = empleados[i];
+      var col = colorPairs[i % colorPairs.length];
+      var d   = new Date(e.created_at);
+      var fecha = d.getDate() + '/' + (d.getMonth()+1) + '/' + d.getFullYear();
+      var sid = e.identifier
+        ? (e.identifier.length > 14 ? e.identifier.slice(0,7) + '…' + e.identifier.slice(-7) : e.identifier)
+        : '—';
 
-    var rankOpts = '';
-    Object.keys(RANK_CONFIG).forEach(function(r) {
-      rankOpts += '<option value="' + r + '"' + (r === e.rango ? ' selected' : '') + '>' + RANK_CONFIG[r].label + '</option>';
-    });
+      var rankOpts = '';
+      Object.keys(RANK_CONFIG).forEach(function(r) {
+        rankOpts += '<option value="' + r + '"' + (r === e.rango ? ' selected' : '') + '>' + RANK_CONFIG[r].label + '</option>';
+      });
 
-    html += '<tr>'
-      + '<td><div class="emp-name-cell">'
-      + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + '">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
-      + '<div><div class="emp-name">' + esc(e.nombre) + '</div></div>'
-      + '</div></td>'
-      + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;color:var(--muted)">' + esc(sid) + '</span></td>'
-      + '<td><select class="rank-select-inline" onchange="cambiarRango(\'' + esc(e.id) + '\', this.value)">' + rankOpts + '</select></td>'
-      + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.65rem;color:var(--muted)">' + fecha + '</span></td>'
-      + '<td><button class="btn-icon" onclick="eliminarEmpleado(\'' + esc(e.id) + '\',\'' + esc(e.nombre) + '\')" title="Eliminar">✕</button></td>'
-      + '</tr>';
-  }
+      html += '<tr>'
+        + '<td><div class="emp-name-cell">'
+        + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + '">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
+        + '<div><div class="emp-name">' + esc(e.nombre) + '</div></div>'
+        + '</div></td>'
+        + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;color:var(--muted)">' + esc(sid) + '</span></td>'
+        + '<td><select class="rank-select-inline" onchange="cambiarRango(' + e.id + ', this.value)">' + rankOpts + '</select></td>'
+        + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.65rem;color:var(--muted)">' + fecha + '</span></td>'
+        + '<td><button class="btn-icon" onclick="eliminarEmpleado(' + e.id + ',\'' + esc(e.nombre) + '\')" title="Eliminar">✕</button></td>'
+        + '</tr>';
+    }
 
-  html += '</tbody></table></div>';
-  wrap.innerHTML = html;
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+  })
+  .catch(function() {
+    wrap.innerHTML = '<div class="empty"><span class="icon">⚠️</span><p>No se pudo conectar con el servidor.</p></div>';
+  });
 }
 
 // ══ LOG PARSER ════════════════════════════════════
