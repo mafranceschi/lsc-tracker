@@ -1957,7 +1957,7 @@ function renderSalaryResult(rows, unmatched, logs) {
         + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:var(--muted);margin-top:0.1rem">'
         + t2.str + (sid ? ' · ' + esc(sid) : '') + '</div>'
         + '</div>'
-        + '<select class="rank-select-inline" id="rank-sel-' + i + '">' + rankOpts + '</select>'
+        + '<select class="rank-select-inline" id="rank-sel-' + i + '" onchange="UNMATCHED_STORE[' + i + '].selectedRank=this.value">' + rankOpts + '</select>'
         + '<button class="btn-primary btn-sm" id="btn-add-' + i + '" onclick="addEmpleadoFromLog(' + i + ')">'
         + '+ Agregar'
         + '</button>'
@@ -2288,7 +2288,9 @@ function addEmpleadoFromLog(idx) {
 
   var selectEl = document.getElementById('rank-sel-' + idx);
   var btnEl    = document.getElementById('btn-add-' + idx);
-  var rango    = selectEl ? selectEl.value : 'experimentado';
+  // Prefer the rank stored on UNMATCHED_STORE (set via onchange) over selectEl.value
+  // to survive any DOM re-renders between selection and click.
+  var rango = (agent.selectedRank) || (selectEl ? selectEl.value : null) || 'experimentado';
 
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = '...'; }
 
@@ -2315,7 +2317,9 @@ function addEmpleadoFromLog(idx) {
     // Colapsar la fila agregada visualmente
     var row = document.getElementById('unmatched-row-' + idx);
     if (row) {
-      row.innerHTML = '<div style="width:100%;font-size:0.78rem;color:var(--success);font-family:\'JetBrains Mono\',monospace;padding:0.1rem 0">✅ ' + esc(data.empleado.nombre) + ' agregado como ' + RANK_CONFIG[rango].label + '</div>';
+      var savedRango = (data.empleado && data.empleado.rango) ? data.empleado.rango : rango;
+      var savedLabel = RANK_CONFIG[savedRango] ? RANK_CONFIG[savedRango].label : savedRango;
+      row.innerHTML = '<div style="width:100%;font-size:0.78rem;color:var(--success);font-family:\'JetBrains Mono\',monospace;padding:0.1rem 0">✅ ' + esc(data.empleado.nombre) + ' agregado como ' + savedLabel + '</div>';
     }
     showToast('✅ ' + data.empleado.nombre + ' agregado', 'ok');
     // Recalcular sueldos con los mismos logs seleccionados
