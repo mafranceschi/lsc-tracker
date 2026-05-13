@@ -30,7 +30,15 @@ if (!Number.isFinite(MAX_LOG_MB) || MAX_LOG_MB <= 0) {
 const RAW_TEXT_MAX_BYTES = MAX_LOG_MB * 1024 * 1024;
 
 app.use(express.json({ limit: `${Math.ceil(MAX_LOG_MB * 2)}mb` }));
-app.use(express.static(path.join(__dirname, '../frontend')));
+app.use(express.static(path.join(__dirname, '../frontend'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // ══════════════════════════════════════════════════════════════
 //  AUTH MIDDLEWARE — solo activo si API_KEY está definida en .env
@@ -366,6 +374,9 @@ app.post('/api/salary-config', auth, (req, res) => {
 });
 
 app.get('*', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
