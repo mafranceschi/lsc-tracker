@@ -6,9 +6,6 @@ backend/node_modules/
 backend/data/
 *.db
 
-# Variables de entorno (contiene claves, no compartir)
-.env
-
 # Logs
 *.log
 npm-debug.log*
