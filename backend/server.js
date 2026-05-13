@@ -90,11 +90,20 @@ if (ENABLE_DB) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS salary_config (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      rango    TEXT NOT NULL,
+      min_hrs  REAL NOT NULL,
+      amount   REAL NOT NULL,
+      display  TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_logs_saved_at     ON logs(saved_at);
     CREATE INDEX IF NOT EXISTS idx_agents_log_id     ON agents(log_id);
     CREATE INDEX IF NOT EXISTS idx_agents_identifier ON agents(identifier);
     CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id);
     CREATE INDEX IF NOT EXISTS idx_empleados_rango   ON empleados(rango);
+    CREATE INDEX IF NOT EXISTS idx_salary_rango      ON salary_config(rango);
   `);
 
   console.log(`[DB] SQLite activo · ${dbPath} · retención ${RETENTION_DAYS}d · WAL ON · FK ON`);
@@ -317,6 +326,42 @@ app.delete('/api/empleados/:id', auth, (req, res) => {
   } catch (err) {
     console.error('[DB] Error al eliminar empleado:', err.message);
     res.status(500).json({ error: 'Error interno al eliminar empleado' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SALARY CONFIG
+// ══════════════════════════════════════════════════════════════
+app.get('/api/salary-config', auth, (_req, res) => {
+  if (!ENABLE_DB) return res.json({ brackets: [] });
+  try {
+    const brackets = db.prepare('SELECT * FROM salary_config ORDER BY rango, min_hrs').all();
+    res.json({ brackets });
+  } catch (err) {
+    console.error('[DB] Error al leer salary config:', err.message);
+    res.status(500).json({ error: 'Error interno al leer configuración salarial' });
+  }
+});
+
+app.post('/api/salary-config', auth, (req, res) => {
+  const { brackets } = req.body;
+  if (!Array.isArray(brackets)) return res.status(400).json({ error: 'brackets[] requerido' });
+  if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
+  try {
+    const stmt = db.prepare('INSERT INTO salary_config (rango, min_hrs, amount, display) VALUES (?, ?, ?, ?)');
+    db.transaction(() => {
+      db.prepare('DELETE FROM salary_config').run();
+      for (const b of brackets) {
+        if (!b.rango || typeof b.min_hrs !== 'number' || typeof b.amount !== 'number') continue;
+        stmt.run(b.rango, b.min_hrs, b.amount, b.display || null);
+      }
+    })();
+    const saved = db.prepare('SELECT * FROM salary_config ORDER BY rango, min_hrs').all();
+    console.log(`[DB] Salary config actualizada: ${saved.length} tramo(s)`);
+    res.json({ saved: true, brackets: saved });
+  } catch (err) {
+    console.error('[DB] Error al guardar salary config:', err.message);
+    res.status(500).json({ error: 'Error interno al guardar configuración salarial' });
   }
 });
 

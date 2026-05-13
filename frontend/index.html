@@ -566,6 +566,67 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 .key-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accentRGB),0.1); }
 .key-field::placeholder { color: var(--muted); }
 
+/* ══ SUELDOS ═════════════════════════════════════ */
+.section-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem;
+}
+.section-card-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--accent2); margin-bottom: 0.3rem;
+}
+.section-card-head { font-size: 0.9rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.3rem; }
+.section-card-sub { font-size: 0.72rem; color: var(--text2); margin-bottom: 1.25rem; line-height: 1.6; }
+
+.brackets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: 0.75rem; margin-top: 1rem; }
+.bracket-card {
+  background: rgba(255,255,255,0.025); border: 1px solid var(--border);
+  border-radius: 10px; padding: 0.9rem;
+}
+.bracket-rank { font-size: 0.74rem; font-weight: 700; margin-bottom: 0.6rem; }
+.bracket-rows { display: flex; flex-direction: column; gap: 0.3rem; }
+.bracket-row { display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; }
+.bracket-range { color: var(--text2); }
+.bracket-amount { color: var(--accent2); font-weight: 700; }
+
+.salary-log-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.65rem 0.85rem; border-radius: 10px;
+  border: 1px solid transparent; margin-bottom: 0.3rem; transition: background 0.1s;
+}
+.salary-log-item:hover { background: rgba(255,255,255,0.03); }
+.salary-log-item.sel { border-color: rgba(var(--accentRGB),0.3); background: rgba(var(--accentRGB),0.05); }
+.salary-log-item input[type=checkbox] { accent-color: var(--accent); width:15px; height:15px; flex-shrink:0; cursor:pointer; }
+.salary-log-info { flex: 1; min-width: 0; cursor: pointer; }
+.salary-log-date { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--accent2); }
+.salary-log-summary { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-top: 0.1rem; }
+
+.salary-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.salary-table th {
+  text-align: left; padding: 0.6rem 1rem;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.56rem;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.salary-table td { padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+.salary-table tr:last-child td { border-bottom: none; }
+.salary-table tr:hover td { background: rgba(255,255,255,0.02); }
+.salary-amount { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 700; color: var(--accent2); }
+.salary-amount.zero { color: var(--muted); font-weight: 400; }
+.salary-hours { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; }
+
+.total-box {
+  background: linear-gradient(135deg, rgba(var(--accentRGB),0.07), rgba(var(--accent2RGB),0.04));
+  border: 1px solid rgba(var(--accentRGB),0.2); border-radius: var(--radius);
+  padding: 1.5rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  margin-top: 1.5rem; flex-wrap: wrap; gap: 1rem; position: relative; overflow: hidden;
+}
+.total-box::after { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(var(--accentRGB),0.5),transparent); }
+.total-box-label { font-family:'JetBrains Mono',monospace; font-size:0.58rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-bottom:0.3rem; }
+.total-box-value { font-size:2.4rem; font-weight:900; letter-spacing:-0.04em; background:linear-gradient(135deg,var(--accent2),#818cf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1; }
+.total-box-sub { font-family:'JetBrains Mono',monospace; font-size:0.58rem; color:var(--muted); margin-top:0.25rem; }
+
 @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
 @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-7px)} 40%{transform:translateX(7px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
 
@@ -806,17 +867,48 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
     <!-- ── Tab: Sueldos ── -->
     <div id="tab-sueldos" style="display:none">
       <div class="page-header">
-        <div class="page-tag">sueldos</div>
+        <div class="page-tag">sueldos · liquidación</div>
         <div class="page-h1">Sueldos</div>
-        <div class="page-sub">Gestión de sueldos del equipo</div>
+        <div class="page-sub">Calculá los sueldos semanales en base a horas trabajadas y rangos</div>
       </div>
       <div class="content">
-        <div class="coming-soon">
-          <div class="cs-icon">💰</div>
-          <h2>En construcción</h2>
-          <p>Esta sección estará disponible próximamente.<br>Podrás gestionar y calcular sueldos del equipo.</p>
-          <div class="cs-badge">próximamente</div>
+
+        <!-- Paso 1: Tabla salarial -->
+        <div class="section-card">
+          <div class="section-card-title">01 · Tabla salarial</div>
+          <div class="section-card-head">Configurar tramos</div>
+          <div class="section-card-sub">Pegá el texto con los tramos de sueldo por rango. Formato: nombre del rango como encabezado, luego los tramos con la cantidad en M.</div>
+          <div class="input-panel" style="margin-bottom:1rem">
+            <div class="input-toolbar">
+              <div class="input-toolbar-left">
+                <span class="input-dot r"></span><span class="input-dot y"></span><span class="input-dot g"></span>
+                <span class="input-label-text">tabla salarial</span>
+              </div>
+            </div>
+            <textarea id="salaryInput" style="min-height:180px;max-height:320px"
+              placeholder="EXPERIMENTADO:&#10;• De 12 a 20 h: 10M&#10;• De 20 a 28 h: 16M&#10;• Más de 35 h: 26M&#10;&#10;INGENIERO / INSTRUCTOR:&#10;• De 12 a 20 h: 14M&#10;• De 20 a 28 h: 20M&#10;• Más de 35 h: 30M&#10;&#10;SUB-JEFE / JEFE:&#10;• De 12 a 20 h: 18M&#10;• De 20 a 28 h: 24M&#10;• Más de 35 h: 34M&#10;&#10;DIRECTOR:&#10;• De 12 a 20 h: 22M&#10;• De 20 a 28 h: 28M&#10;• Más de 35 h: 38M"></textarea>
+            <div class="input-footer">
+              <button class="btn-primary" id="btnParseSalary" onclick="parseSalaryConfig()">⚡ Parsear y guardar</button>
+            </div>
+          </div>
+          <div id="salaryBracketsPreview"></div>
         </div>
+
+        <!-- Paso 2: Seleccionar semana -->
+        <div class="section-card">
+          <div class="section-card-title">02 · Semana a liquidar</div>
+          <div class="section-card-head">Seleccionar ejecuciones</div>
+          <div class="section-card-sub">Elegí los logs que componen la semana. Las horas de cada agente se sumarán automáticamente.</div>
+          <div id="salaryLogsWrap"></div>
+          <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            <button class="btn-primary" id="btnCalcSueldos" onclick="calcularSueldos()" disabled>📊 Calcular sueldos</button>
+            <span id="salarySelCount" style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--muted)">Seleccioná al menos un log</span>
+          </div>
+        </div>
+
+        <!-- Resultado -->
+        <div id="salaryResult" style="display:none"></div>
+
       </div>
     </div>
 
@@ -939,6 +1031,7 @@ function switchTab(name) {
   });
   if (name === 'historial') loadHistory();
   if (name === 'gest-emp')  renderEmpleados();
+  if (name === 'sueldos')   loadSalaryTab();
   closeSidebar();
 }
 
@@ -1409,6 +1502,369 @@ function backToHistory() {
   document.getElementById('histBarWrap').style.display = '';
   document.getElementById('combinedView').style.display = 'none';
   updateSelection(); // Re-show select bar if there's still a selection
+}
+
+// ══ SUELDOS ══════════════════════════════════════
+var SALARY_CONFIG    = [];
+var SALARY_LOG_DATA_S = [];
+var selectedSalaryLogs = {};
+
+function loadSalaryTab() {
+  loadSalaryConfigFromDB();
+  loadSalaryLogs();
+}
+
+// ── Cargar config desde DB ─────────────────────
+function loadSalaryConfigFromDB() {
+  fetch('/api/salary-config', { headers: apiHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      SALARY_CONFIG = data.brackets || [];
+      renderSalaryBrackets(SALARY_CONFIG);
+    })
+    .catch(function() {});
+}
+
+function renderSalaryBrackets(brackets) {
+  var el = document.getElementById('salaryBracketsPreview');
+  if (!brackets || brackets.length === 0) {
+    el.innerHTML = '<p style="font-size:0.75rem;color:var(--muted);font-family:\'JetBrains Mono\',monospace">Sin configuración guardada. Pegá la tabla salarial arriba y presioná Parsear.</p>';
+    return;
+  }
+  var grouped = {};
+  for (var i = 0; i < brackets.length; i++) {
+    var b = brackets[i];
+    if (!grouped[b.rango]) grouped[b.rango] = [];
+    grouped[b.rango].push(b);
+  }
+  var order = ['experimentado','ingeniero','subjefe','jefe','director'];
+  var html = '<div class="brackets-grid">';
+  for (var ri = 0; ri < order.length; ri++) {
+    var rank = order[ri];
+    if (!grouped[rank]) continue;
+    var cfg = RANK_CONFIG[rank] || { label: rank, icon: '' };
+    var rows = grouped[rank].slice().sort(function(a,b){ return a.min_hrs - b.min_hrs; });
+    html += '<div class="bracket-card"><div class="bracket-rank">' + cfg.icon + ' ' + cfg.label + '</div><div class="bracket-rows">';
+    for (var j = 0; j < rows.length; j++) {
+      html += '<div class="bracket-row"><span class="bracket-range">' + esc(rows[j].display || rows[j].min_hrs + 'h+') + '</span><span class="bracket-amount">' + rows[j].amount + 'M</span></div>';
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Parsear texto de tabla salarial ─────────────
+function parseSalaryText(text) {
+  var lines = text.split('\n').map(function(l) { return l.trim(); });
+  var brackets = [];
+  var currentRanks = [];
+
+  var RANK_MAP_S = [
+    { keys: ['experimentado'],                        rank: 'experimentado' },
+    { keys: ['ingeniero', 'instructor'],              rank: 'ingeniero'     },
+    { keys: ['sub-jefe', 'subjefe', 'sub jefe'],      rank: 'subjefe'       },
+    { keys: ['jefe'],                                 rank: 'jefe'          },
+    { keys: ['director'],                             rank: 'director'      },
+  ];
+
+  function identifyRanks(line) {
+    var low = line.toLowerCase();
+    var found = [];
+    for (var i = 0; i < RANK_MAP_S.length; i++) {
+      for (var j = 0; j < RANK_MAP_S[i].keys.length; j++) {
+        if (low.indexOf(RANK_MAP_S[i].keys[j]) >= 0 && found.indexOf(RANK_MAP_S[i].rank) < 0) {
+          found.push(RANK_MAP_S[i].rank); break;
+        }
+      }
+    }
+    return found;
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (!line) continue;
+    var clean = line.replace(/^[•\-\*\s]+/, '').trim();
+
+    // Detect rank header: contains a rank name and NO amount at end
+    var hasAmount = clean.match(/(\d+(?:\.\d+)?)\s*[Mm]\s*$/);
+    var possibleRanks = identifyRanks(clean);
+
+    if (possibleRanks.length > 0 && !hasAmount) {
+      currentRanks = possibleRanks;
+      continue;
+    }
+    if (currentRanks.length === 0 || !hasAmount) continue;
+
+    var amount = parseFloat(hasAmount[1]);
+    var minHrs = null;
+    var display = clean.replace(/\s+/g,' ');
+
+    var mRange = clean.match(/[Dd]e\s+(\d+(?:\.\d+)?)\s+[Aa]\s+(\d+(?:\.\d+)?)/);
+    var mMore  = clean.match(/[Mm][aá]s\s+de\s+(\d+(?:\.\d+)?)/i);
+
+    if (mRange)     minHrs = parseFloat(mRange[1]);
+    else if (mMore) minHrs = parseFloat(mMore[1]);
+
+    if (minHrs === null) continue;
+    for (var r = 0; r < currentRanks.length; r++) {
+      brackets.push({ rango: currentRanks[r], min_hrs: minHrs, amount: amount, display: display });
+    }
+  }
+  return brackets;
+}
+
+function parseSalaryConfig() {
+  var text = document.getElementById('salaryInput').value.trim();
+  if (!text) { showToast('Pegá la tabla salarial primero', 'err'); return; }
+
+  var brackets = parseSalaryText(text);
+  if (brackets.length === 0) {
+    showToast('No se detectaron tramos. Verificá el formato.', 'err'); return;
+  }
+
+  var btn = document.getElementById('btnParseSalary');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+
+  fetch('/api/salary-config', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ brackets: brackets }) })
+    .then(function(r) {
+      if (r.status === 401) { handleUnauth(parseSalaryConfig); return null; }
+      return r.json();
+    })
+    .then(function(data) {
+      if (!data) return;
+      if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+      SALARY_CONFIG = data.brackets || brackets;
+      renderSalaryBrackets(SALARY_CONFIG);
+      showToast('✅ ' + SALARY_CONFIG.length + ' tramos guardados', 'ok');
+    })
+    .catch(function() { showToast('❌ Error al guardar', 'err'); })
+    .finally(function() { btn.disabled = false; btn.textContent = '⚡ Parsear y guardar'; });
+}
+
+// ── Cargar logs para selección ──────────────────
+function loadSalaryLogs() {
+  var wrap = document.getElementById('salaryLogsWrap');
+  wrap.innerHTML = '<div class="empty" style="padding:1.5rem 0"><span class="icon">⏳</span><p>Cargando...</p></div>';
+  selectedSalaryLogs = {};
+  updateSalarySelCount();
+
+  fetch('/api/logs', { headers: apiHeaders() })
+    .then(function(r) {
+      if (r.status === 401) { handleUnauth(loadSalaryLogs); return null; }
+      return r.json();
+    })
+    .then(function(data) {
+      if (!data) return;
+      if (!data.dbEnabled || !data.logs || data.logs.length === 0) {
+        wrap.innerHTML = '<div class="empty" style="padding:1.5rem 0"><span class="icon">📫</span><p>Sin logs guardados aún. Analizá un log primero.</p></div>';
+        return;
+      }
+      SALARY_LOG_DATA_S = data.logs;
+      var html = '';
+      for (var i = 0; i < data.logs.length; i++) {
+        var log = data.logs[i], totalMins = 0;
+        for (var j = 0; j < log.agents.length; j++) totalMins += log.agents[j].totalMins;
+        var tt = fmtTime(totalMins);
+        html += '<div class="salary-log-item" data-logid="' + log.id + '">'
+          + '<input type="checkbox" onchange="toggleSalaryLog(' + log.id + ', this)">'
+          + '<div class="salary-log-info" onclick="this.previousElementSibling.click()">'
+          + '<div class="salary-log-date">' + esc(fmtDate(log.savedAt)) + '</div>'
+          + '<div class="salary-log-summary">log #' + log.id + ' · ' + log.agents.length + ' agentes · ' + tt.str + ' total</div>'
+          + '</div></div>';
+      }
+      wrap.innerHTML = html;
+    })
+    .catch(function() {
+      wrap.innerHTML = '<div class="empty" style="padding:1.5rem 0"><span class="icon">⚠️</span><p>No se pudo conectar.</p></div>';
+    });
+}
+
+function toggleSalaryLog(logId, checkbox) {
+  var log = null;
+  for (var i = 0; i < SALARY_LOG_DATA_S.length; i++) {
+    if (SALARY_LOG_DATA_S[i].id === logId) { log = SALARY_LOG_DATA_S[i]; break; }
+  }
+  if (!log) return;
+  var item = document.querySelector('.salary-log-item[data-logid="' + logId + '"]');
+  if (checkbox.checked) {
+    selectedSalaryLogs[logId] = log;
+    if (item) item.classList.add('sel');
+  } else {
+    delete selectedSalaryLogs[logId];
+    if (item) item.classList.remove('sel');
+  }
+  updateSalarySelCount();
+}
+
+function updateSalarySelCount() {
+  var count = Object.keys(selectedSalaryLogs).length;
+  var btn = document.getElementById('btnCalcSueldos');
+  var lbl = document.getElementById('salarySelCount');
+  if (btn) btn.disabled = count === 0;
+  if (lbl) lbl.textContent = count === 0
+    ? 'Seleccioná al menos un log'
+    : count + ' log' + (count !== 1 ? 's' : '') + ' seleccionado' + (count !== 1 ? 's' : '');
+}
+
+// ── Calcular sueldos ────────────────────────────
+function calcSalaryAmount(rango, totalMins, config) {
+  var hrs = totalMins / 60;
+  var tramos = config.filter(function(b) { return b.rango === rango; })
+                     .slice().sort(function(a,b) { return b.min_hrs - a.min_hrs; }); // highest first
+  for (var i = 0; i < tramos.length; i++) {
+    if (hrs >= tramos[i].min_hrs) return tramos[i].amount;
+  }
+  return 0; // didn't reach minimum threshold
+}
+
+function calcularSueldos() {
+  var logIds = Object.keys(selectedSalaryLogs);
+  if (logIds.length === 0) { showToast('Seleccioná al menos un log', 'err'); return; }
+  if (SALARY_CONFIG.length === 0) { showToast('Configurá la tabla salarial primero (Paso 1)', 'err'); return; }
+
+  // Merge agents by identifier across selected logs
+  var agentMap = {};
+  var sortedLogs = logIds.map(function(id) { return selectedSalaryLogs[id]; });
+  sortedLogs.sort(function(a, b) { return new Date(a.savedAt) - new Date(b.savedAt); });
+
+  for (var i = 0; i < sortedLogs.length; i++) {
+    for (var j = 0; j < sortedLogs[i].agents.length; j++) {
+      var a = sortedLogs[i].agents[j];
+      if (!agentMap[a.identifier]) agentMap[a.identifier] = { identifier: a.identifier, name: a.name, totalMins: 0 };
+      agentMap[a.identifier].totalMins += a.totalMins;
+    }
+  }
+
+  fetch('/api/empleados', { headers: apiHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var empleados = data.empleados || [];
+
+      // Build lookup maps
+      var empById = {}, empByName = {};
+      for (var i = 0; i < empleados.length; i++) {
+        var e = empleados[i];
+        if (e.identifier) empById[e.identifier] = e;
+        empByName[e.nombre.toLowerCase()] = e;
+      }
+
+      var rows = [];
+      // For each registered employee, find their log hours
+      for (var i = 0; i < empleados.length; i++) {
+        var emp = empleados[i];
+        var agent = null;
+        if (emp.identifier && agentMap[emp.identifier]) {
+          agent = agentMap[emp.identifier];
+        } else {
+          // fallback: name match
+          for (var aid in agentMap) {
+            if (agentMap[aid].name.toLowerCase() === emp.nombre.toLowerCase()) { agent = agentMap[aid]; break; }
+          }
+        }
+        var totalMins = agent ? agent.totalMins : 0;
+        var salary    = calcSalaryAmount(emp.rango, totalMins, SALARY_CONFIG);
+        rows.push({ emp: emp, totalMins: totalMins, salary: salary });
+      }
+
+      // Find agents with no matching employee (can't calculate salary without rank)
+      var unmatched = [];
+      for (var aid in agentMap) {
+        var ag = agentMap[aid], found = false;
+        for (var i = 0; i < empleados.length; i++) {
+          var e = empleados[i];
+          if ((e.identifier && e.identifier === aid) || e.nombre.toLowerCase() === ag.name.toLowerCase()) { found = true; break; }
+        }
+        if (!found) unmatched.push(ag);
+      }
+
+      renderSalaryResult(rows, unmatched, sortedLogs);
+    })
+    .catch(function() { showToast('❌ Error al cargar empleados', 'err'); });
+}
+
+function renderSalaryResult(rows, unmatched, logs) {
+  var el = document.getElementById('salaryResult');
+
+  rows.sort(function(a, b) { return b.salary - a.salary || b.totalMins - a.totalMins; });
+  var totalSalary = rows.reduce(function(sum, r) { return sum + r.salary; }, 0);
+  var withSalary  = rows.filter(function(r) { return r.salary > 0; }).length;
+
+  var COLORS_L = [
+    ['rgba(139,92,246,0.15)','#c4b5fd'],['rgba(34,211,238,0.15)','#67e8f9'],
+    ['rgba(245,158,11,0.15)','#fcd34d'],['rgba(239,68,68,0.15)','#fca5a5'],
+    ['rgba(16,185,129,0.15)','#6ee7b7'],['rgba(236,72,153,0.15)','#f9a8d4'],
+  ];
+
+  // Day chips
+  var chipsHtml = logs.map(function(l) {
+    return '<span class="day-chip">📅 ' + esc(fmtDate(l.savedAt)) + '</span>';
+  }).join('');
+
+  var html = '<div class="section-card">'
+    + '<div class="section-card-title">03 · Resultado</div>'
+    + '<div class="section-card-head" style="margin-bottom:0.75rem">Liquidación semanal</div>'
+    + '<div class="combined-days" style="margin-bottom:1.25rem">' + chipsHtml + '</div>'
+    + '<div class="emp-table-wrap"><table class="salary-table"><thead><tr>'
+    + '<th>Empleado</th><th>Rango</th><th>Horas semana</th><th>Sueldo</th>'
+    + '</tr></thead><tbody>';
+
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], e = r.emp;
+    var cfg = RANK_CONFIG[e.rango] || { label: e.rango, icon: '', cls: '' };
+    var col = COLORS_L[i % COLORS_L.length];
+    var t   = fmtTime(r.totalMins);
+    var sid = e.identifier ? (e.identifier.length > 14 ? e.identifier.slice(0,7)+'…'+e.identifier.slice(-7) : e.identifier) : '';
+
+    var salaryTxt, salaryCls;
+    if (r.salary > 0) {
+      salaryTxt = r.salary + 'M'; salaryCls = '';
+    } else if (r.totalMins === 0) {
+      salaryTxt = '— sin horas'; salaryCls = 'zero';
+    } else {
+      salaryTxt = '— no alcanza mín.'; salaryCls = 'zero';
+    }
+
+    html += '<tr>'
+      + '<td><div class="emp-name-cell">'
+      + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + '">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
+      + '<div><div class="emp-name">' + esc(e.nombre) + '</div>'
+      + (sid ? '<div class="emp-id-small">' + esc(sid) + '</div>' : '')
+      + '</div></div></td>'
+      + '<td><span class="rank-badge ' + cfg.cls + '">' + cfg.icon + ' ' + cfg.label + '</span></td>'
+      + '<td><span class="salary-hours">' + (r.totalMins > 0 ? t.str : '<span style="color:var(--muted)">—</span>') + '</span></td>'
+      + '<td><span class="salary-amount ' + salaryCls + '">' + salaryTxt + '</span></td>'
+      + '</tr>';
+  }
+  html += '</tbody></table></div>';
+
+  // Unmatched agents warning
+  if (unmatched.length > 0) {
+    html += '<div style="margin-top:1rem;padding:0.85rem 1rem;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px">'
+      + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:#fcd34d;margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.1em">⚠ Agentes en logs sin empleado registrado</div>';
+    for (var i = 0; i < unmatched.length; i++) {
+      var a = unmatched[i], t2 = fmtTime(a.totalMins);
+      html += '<div style="font-size:0.78rem;padding:0.22rem 0;color:var(--text2)">'
+        + esc(a.name) + ' <span style="font-family:\'JetBrains Mono\',monospace;font-size:0.6rem;color:var(--muted)">· ' + t2.str + ' · registralo en Empleados para asignar rango</span></div>';
+    }
+    html += '</div>';
+  }
+
+  // Total box
+  html += '<div class="total-box">'
+    + '<div><div class="total-box-label">Total sueldos semana</div>'
+    + '<div class="total-box-value">' + totalSalary + 'M</div>'
+    + '<div class="total-box-sub">' + withSalary + ' empleado' + (withSalary !== 1 ? 's' : '') + ' con sueldo · ' + rows.length + ' total</div>'
+    + '</div>'
+    + '<div style="text-align:right">'
+    + '<div class="total-box-label">Período</div>'
+    + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.78rem;color:var(--text2);font-weight:600">' + logs.length + ' ejecución' + (logs.length !== 1 ? 'es' : '') + '</div>'
+    + '</div></div>'
+    + '</div>'; // close section-card
+
+  el.innerHTML = html;
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 </script>
 </body>
