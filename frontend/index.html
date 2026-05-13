@@ -1514,9 +1514,10 @@ function backToHistory() {
 }
 
 // ══ SUELDOS ══════════════════════════════════════
-var SALARY_CONFIG    = [];
-var SALARY_LOG_DATA_S = [];
+var SALARY_CONFIG      = [];
+var SALARY_LOG_DATA_S  = [];
 var selectedSalaryLogs = {};
+var UNMATCHED_STORE    = []; // agentes sin empleado del último cálculo
 
 function loadSalaryTab() {
   loadSalaryConfigFromDB();
@@ -1849,14 +1850,35 @@ function renderSalaryResult(rows, unmatched, logs) {
   }
   html += '</tbody></table></div>';
 
-  // Unmatched agents warning
+  // Unmatched agents — inline add form
+  UNMATCHED_STORE = unmatched.slice();
   if (unmatched.length > 0) {
-    html += '<div style="margin-top:1rem;padding:0.85rem 1rem;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px">'
-      + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:#fcd34d;margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.1em">⚠ Agentes en logs sin empleado registrado</div>';
+    var rankOpts = Object.keys(RANK_CONFIG).map(function(r) {
+      return '<option value="' + r + '">' + RANK_CONFIG[r].icon + ' ' + RANK_CONFIG[r].label + '</option>';
+    }).join('');
+
+    html += '<div id="unmatchedBox" style="margin-top:1rem;border:1px solid rgba(245,158,11,0.25);border-radius:12px;overflow:hidden">'
+      + '<div style="padding:0.75rem 1rem;background:rgba(245,158,11,0.07);display:flex;align-items:center;gap:0.5rem">'
+      + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:#fcd34d;text-transform:uppercase;letter-spacing:0.1em">⚠ Agentes sin empleado registrado</span>'
+      + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.56rem;color:var(--muted);margin-left:auto">Asigná un rango y agregá al sistema</span>'
+      + '</div>';
+
     for (var i = 0; i < unmatched.length; i++) {
       var a = unmatched[i], t2 = fmtTime(a.totalMins);
-      html += '<div style="font-size:0.78rem;padding:0.22rem 0;color:var(--text2)">'
-        + esc(a.name) + ' <span style="font-family:\'JetBrains Mono\',monospace;font-size:0.6rem;color:var(--muted)">· ' + t2.str + ' · registralo en Empleados para asignar rango</span></div>';
+      var sid = a.identifier && a.identifier.indexOf('__noid__') < 0
+        ? (a.identifier.length > 16 ? a.identifier.slice(0,8)+'…'+a.identifier.slice(-8) : a.identifier)
+        : '';
+      html += '<div id="unmatched-row-' + i + '" style="display:flex;align-items:center;gap:0.75rem;padding:0.7rem 1rem;border-top:1px solid rgba(255,255,255,0.04);flex-wrap:wrap">'
+        + '<div style="flex:1;min-width:160px">'
+        + '<div style="font-size:0.84rem;font-weight:600">' + esc(a.name) + '</div>'
+        + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:var(--muted);margin-top:0.1rem">'
+        + t2.str + (sid ? ' · ' + esc(sid) : '') + '</div>'
+        + '</div>'
+        + '<select class="rank-select-inline" id="rank-sel-' + i + '">' + rankOpts + '</select>'
+        + '<button class="btn-primary btn-sm" id="btn-add-' + i + '" onclick="addEmpleadoFromLog(' + i + ')">'
+        + '+ Agregar'
+        + '</button>'
+        + '</div>';
     }
     html += '</div>';
   }
@@ -1876,6 +1898,52 @@ function renderSalaryResult(rows, unmatched, logs) {
   el.innerHTML = html;
   el.style.display = 'block';
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Agregar empleado desde el resultado de sueldos
+function addEmpleadoFromLog(idx) {
+  var agent = UNMATCHED_STORE[idx];
+  if (!agent) return;
+
+  var selectEl = document.getElementById('rank-sel-' + idx);
+  var btnEl    = document.getElementById('btn-add-' + idx);
+  var rango    = selectEl ? selectEl.value : 'experimentado';
+
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '...'; }
+
+  // Si el identifier tiene el prefijo interno __noid__, no lo guardamos
+  var identifier = (agent.identifier && agent.identifier.indexOf('__noid__') < 0)
+    ? agent.identifier : null;
+
+  fetch('/api/empleados', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({ nombre: agent.name, identifier: identifier, rango: rango })
+  })
+  .then(function(r) {
+    if (r.status === 401) { handleUnauth(function() { addEmpleadoFromLog(idx); }); return null; }
+    return r.json();
+  })
+  .then(function(data) {
+    if (!data) return;
+    if (data.error) {
+      showToast('❌ ' + data.error, 'err');
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = '+ Agregar'; }
+      return;
+    }
+    // Colapsar la fila agregada visualmente
+    var row = document.getElementById('unmatched-row-' + idx);
+    if (row) {
+      row.innerHTML = '<div style="width:100%;font-size:0.78rem;color:var(--success);font-family:\'JetBrains Mono\',monospace;padding:0.1rem 0">✅ ' + esc(data.empleado.nombre) + ' agregado como ' + RANK_CONFIG[rango].label + '</div>';
+    }
+    showToast('✅ ' + data.empleado.nombre + ' agregado', 'ok');
+    // Recalcular sueldos con los mismos logs seleccionados
+    calcularSueldos();
+  })
+  .catch(function() {
+    showToast('❌ Error al agregar empleado', 'err');
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '+ Agregar'; }
+  });
 }
 </script>
 </body>
