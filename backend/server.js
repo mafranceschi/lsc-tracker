@@ -118,7 +118,7 @@ if (ENABLE_DB) {
   // Migraciones no destructivas — agregan columnas si no existen
   try { db.exec('ALTER TABLE empleados ADD COLUMN recently_joined_at TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE empleados ADD COLUMN bot_hours INTEGER DEFAULT 0'); } catch (_) {}
-  try { db.exec('ALTER TABLE empleados ADD COLUMN bot_mins  INTEGER DEFAULT 0'); } catch (_) {}
+  // bot_hours stores total minutes (name kept for backwards compat)
 
   console.log(`[DB] SQLite activo · ${dbPath} · retención ${RETENTION_DAYS}d · WAL ON · FK ON`);
 } else {
@@ -313,6 +313,7 @@ app.put('/api/empleados/:id', auth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
   const { nombre, identifier, rango, recently_joined, bot_hours, bot_mins } = req.body;
+  // bot_mins is the canonical field (total minutes); bot_hours is the column name (legacy)
   if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
   try {
     const existing = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
@@ -323,14 +324,12 @@ app.put('/api/empleados/:id', auth, (req, res) => {
     const nuevoRecentlyJoined  = recently_joined === true  ? new Date().toISOString()
                                 : recently_joined === false ? null
                                 : existing.recently_joined_at;
-    const nuevoBotHours        = (typeof bot_hours === 'number' && bot_hours >= 0)
-                                ? Math.floor(bot_hours)
-                                : (existing.bot_hours || 0);
-    const nuevoBotMins         = (typeof bot_mins === 'number' && bot_mins >= 0)
-                                ? Math.floor(bot_mins)
-                                : (existing.bot_mins || 0);
-    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ?, recently_joined_at = ?, bot_hours = ?, bot_mins = ? WHERE id = ?')
-      .run(nuevoNombre, nuevoIdentifier, nuevoRango, nuevoRecentlyJoined, nuevoBotHours, nuevoBotMins, id);
+    // bot_mins (total minutes) is stored in the bot_hours column
+    const nuevoBotMins = (typeof bot_mins === 'number' && bot_mins >= 0) ? Math.floor(bot_mins)
+                       : (typeof bot_hours === 'number' && bot_hours >= 0) ? Math.floor(bot_hours)
+                       : (existing.bot_hours || 0);
+    db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ?, recently_joined_at = ?, bot_hours = ? WHERE id = ?')
+      .run(nuevoNombre, nuevoIdentifier, nuevoRango, nuevoRecentlyJoined, nuevoBotMins, id);
     const updated = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
     res.json({ empleado: updated });
   } catch (err) {

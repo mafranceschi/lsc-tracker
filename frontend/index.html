@@ -1210,11 +1210,17 @@ function saveBotHours(empId) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+      var tm = data.empleado.bot_hours || 0;  // stored as total minutes
       var badge = document.getElementById('bot-badge-' + empId);
       if (badge) {
-        var tm = data.empleado.bot_mins || 0;
         badge.textContent = tm > 0 ? fmtTime(tm).str : '—';
         badge.style.color = tm > 0 ? '#22d3ee' : 'var(--muted)';
+      }
+      // Brief green tick to confirm save
+      var card = document.getElementById('bot-card-' + empId);
+      if (card) {
+        card.style.borderColor = 'rgba(16,185,129,0.5)';
+        setTimeout(function() { card.style.borderColor = ''; }, 1200);
       }
     })
     .catch(function() { showToast('❌ Error al guardar horas BOT', 'err'); });
@@ -1254,13 +1260,13 @@ function renderBotHoras() {
         var e = emps[i];
         var col = COLORS_L[i % COLORS_L.length];
         var cfg = RANK_CONFIG[e.rango] || { label: e.rango, icon: '' };
-        var tm  = e.bot_mins || 0;
+        var tm  = e.bot_hours || 0;  // bot_hours stores total minutes
         var bh  = Math.floor(tm / 60);
         var bm  = tm % 60;
         var badgeTxt = tm > 0 ? fmtTime(tm).str : '—';
         var badgeColor = tm > 0 ? '#22d3ee' : 'var(--muted)';
 
-        html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.1rem 1rem;display:flex;flex-direction:column;gap:0.75rem">'
+        html += '<div id="bot-card-' + e.id + '" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.1rem 1rem;display:flex;flex-direction:column;gap:0.75rem;transition:border-color 0.3s">'
           // Employee info
           + '<div style="display:flex;align-items:center;gap:0.65rem">'
           + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + ';width:36px;height:36px;border-radius:9px;font-size:0.85rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
@@ -2047,7 +2053,7 @@ function renderSalaryResult(rows, unmatched, logs) {
       + '</div></div></td>'
       + '<td><span class="rank-badge ' + cfg.cls + '">' + cfg.icon + ' ' + cfg.label + '</span></td>'
       + '<td><span class="salary-hours">' + (r.totalMins > 0 ? t.str : '<span style="color:var(--muted)">—</span>') + '</span></td>'
-      + '<td style="text-align:center">' + (e.bot_mins > 0 ? '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.78rem;font-weight:700;color:#22d3ee">' + fmtTime(e.bot_mins).str + '</span>' : '<span style="color:var(--muted);font-size:0.75rem">—</span>') + '</td>'
+      + '<td style="text-align:center">' + (e.bot_hours > 0 ? '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.78rem;font-weight:700;color:#22d3ee">' + fmtTime(e.bot_hours).str + '</span>' : '<span style="color:var(--muted);font-size:0.75rem">—</span>') + '</td>'
       + '<td><span class="salary-amount ' + salaryCls + '">' + salaryTxt + '</span></td>'
       + '<td style="text-align:center"><button id="btn-asc-' + e.id + '" class="btn-icon" onclick="toggleAscenso(' + e.id + ')" title="Marcar ascenso" style="' + (ascActive ? 'color:#00b050;border-color:rgba(0,176,80,0.4);background:rgba(0,176,80,0.08)' : '') + '">↑</button></td>'
       + '<td style="text-align:center"><button id="btn-fire-' + e.id + '" class="btn-icon" onclick="toggleFired(' + e.id + ')" title="Marcar despedido" style="' + (fireActive ? 'color:var(--danger);border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.06)' : '') + '">✕</button></td>'
@@ -2365,7 +2371,7 @@ async function generateSalaryExcel() {
     if (!fired) { totalSalary += row.salary; empCount++; }
     var salStr = fired ? '' : (reachedMin ? row.salary+'M' : '');
 
-    var botStr = (e.bot_mins && e.bot_mins > 0) ? fmtTime(e.bot_mins).str : '';
+    var botStr = (e.bot_hours && e.bot_hours > 0) ? fmtTime(e.bot_hours).str : '';
     sc(curRow,CA, emptyCell(CLR_WHITE));
     sc(curRow,CB, dataCell(comentario, fill, !!comentario, 'left'));
     sc(curRow,CC, dataCell(mechStr,    fill, false,        'left'));
