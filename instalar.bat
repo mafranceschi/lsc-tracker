@@ -120,7 +120,7 @@ echo.
 :: ----------------------------------------
 echo  [3/4] Instalando dependencias npm...
 :: ----------------------------------------
-cd /d "%INSTALL_DIR%"
+cd /d "%INSTALL_DIR%\backend"
 call npm install --omit=dev
 if %errorlevel% neq 0 (
     echo  ERROR: Fallo npm install.
