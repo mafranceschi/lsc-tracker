@@ -1721,13 +1721,14 @@ function updateSalarySelCount() {
 
 // ── Calcular sueldos ────────────────────────────
 function calcSalaryAmount(rango, totalMins, config) {
-  var hrs = totalMins / 60;
+  // Redondear igual que fmtTime para evitar que 719.8min → 11.996h no alcance el tramo de 12h
+  var hrs = Math.round(totalMins) / 60;
   var tramos = config.filter(function(b) { return b.rango === rango; })
                      .slice().sort(function(a,b) { return b.min_hrs - a.min_hrs; }); // highest first
   for (var i = 0; i < tramos.length; i++) {
     if (hrs >= tramos[i].min_hrs) return tramos[i].amount;
   }
-  return 0; // didn't reach minimum threshold
+  return 0;
 }
 
 function calcularSueldos() {
