@@ -38,7 +38,25 @@ echo  Destino: %INSTALL_DIR%
 echo.
 
 :: ----------------------------------------
-echo  [1/4] Verificando Node.js...
+echo  [0/5] Actualizando desde el repositorio...
+:: ----------------------------------------
+git --version >nul 2>&1
+if %errorlevel% == 0 (
+    cd /d "%SRC_DIR%"
+    echo        Git encontrado. Bajando ultimos cambios...
+    git pull --ff-only origin main >nul 2>&1
+    if !errorlevel! == 0 (
+        echo        OK: Repositorio actualizado
+    ) else (
+        echo        AVISO: No se pudo actualizar ^(sin internet o conflicto^). Usando version local.
+    )
+) else (
+    echo        AVISO: Git no instalado. Usando version local del archivo.
+)
+echo.
+
+:: ----------------------------------------
+echo  [1/5] Verificando Node.js...
 :: ----------------------------------------
 node --version >nul 2>&1
 if %errorlevel% == 0 (
@@ -87,7 +105,7 @@ for /f "tokens=*" %%v in ('node --version') do echo        OK: Node.js %%v insta
 echo.
 
 :: ----------------------------------------
-echo  [2/4] Copiando archivos de la app...
+echo  [2/5] Copiando archivos de la app...
 :: ----------------------------------------
 
 if exist "%INSTALL_DIR%\backend\data" (
@@ -118,7 +136,7 @@ echo        OK: Archivos copiados a %INSTALL_DIR%
 echo.
 
 :: ----------------------------------------
-echo  [3/4] Instalando dependencias npm...
+echo  [3/5] Instalando dependencias npm...
 :: ----------------------------------------
 cd /d "%INSTALL_DIR%\backend"
 call npm install --omit=dev
@@ -131,12 +149,24 @@ echo        OK: Dependencias instaladas
 echo.
 
 :: ----------------------------------------
-echo  [4/4] Creando accesos directos...
+echo  [4/5] Creando accesos directos...
 :: ----------------------------------------
 if not exist "%DESKTOP_FOLDER%" mkdir "%DESKTOP_FOLDER%"
 copy /y "%INSTALL_DIR%\scripts\ARRANCAR.bat" "%DESKTOP_FOLDER%\ARRANCAR.bat" >nul
 copy /y "%INSTALL_DIR%\scripts\DETENER.bat"  "%DESKTOP_FOLDER%\DETENER.bat"  >nul
 echo        OK: Carpeta "LSC Tracker" creada en el Escritorio
+echo.
+
+:: ----------------------------------------
+echo  [5/5] Protegiendo configuracion local...
+:: ----------------------------------------
+:: Si ya existe un .env con configuracion propia, NO lo pisamos
+if exist "%INSTALL_DIR%\.env.local" (
+    copy /y "%INSTALL_DIR%\.env.local" "%INSTALL_DIR%\.env" >nul
+    echo        OK: Configuracion local restaurada desde .env.local
+) else (
+    echo        OK: Configuracion por defecto aplicada
+)
 echo.
 
 echo  ==========================================
