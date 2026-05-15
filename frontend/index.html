@@ -171,6 +171,27 @@ body::after {
 
 /* ── Sidebar bottom ──────────────────────────── */
 .sidebar-bottom { margin-top: auto; border-top: 1px solid var(--border); }
+/* Discord toggle */
+.discord-toggle-row {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.7rem 1.5rem; cursor: default;
+  border-bottom: 1px solid var(--border);
+}
+.discord-toggle-icon { font-size: 0.95rem; }
+.discord-toggle-label { font-size: 0.72rem; color: var(--text2); flex: 1; letter-spacing: 0.03em; }
+.discord-switch { position: relative; display: inline-block; width: 34px; height: 18px; flex-shrink: 0; }
+.discord-switch input { opacity: 0; width: 0; height: 0; }
+.discord-slider {
+  position: absolute; inset: 0; border-radius: 18px;
+  background: #3a3a5a; transition: background 0.2s; cursor: pointer;
+}
+.discord-slider:before {
+  content: ''; position: absolute; width: 12px; height: 12px;
+  left: 3px; top: 3px; border-radius: 50%;
+  background: #fff; transition: transform 0.2s;
+}
+.discord-switch input:checked + .discord-slider { background: #5865F2; }
+.discord-switch input:checked + .discord-slider:before { transform: translateX(16px); }
 .sidebar-info {
   padding: 0.85rem 1.5rem;
   font-family: 'JetBrains Mono', monospace;
@@ -772,6 +793,14 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
     </nav>
 
     <div class="sidebar-bottom">
+      <div class="discord-toggle-row" id="discordToggleRow" title="Habilitar / deshabilitar notificaciones de Discord">
+        <span class="discord-toggle-icon">🔔</span>
+        <span class="discord-toggle-label">Discord</span>
+        <label class="discord-switch">
+          <input type="checkbox" id="discordToggleChk" onchange="setDiscordEnabled(this.checked)">
+          <span class="discord-slider"></span>
+        </label>
+      </div>
       <div class="sidebar-info" id="sidebarInfo">Conectando...</div>
       <div class="sidebar-wm">by mateo franceschi</div>
     </div>
@@ -1071,8 +1100,39 @@ function switchTab(name) {
   closeSidebar();
 }
 
+// ══ DISCORD TOGGLE ════════════════════════════════
+var DISCORD_ENABLED = localStorage.getItem('discordEnabled') !== 'false'; // default ON
+
+function initDiscordToggle() {
+  var chk = document.getElementById('discordToggleChk');
+  if (chk) chk.checked = DISCORD_ENABLED;
+  _applyDiscordToggleStyle();
+}
+
+function setDiscordEnabled(val) {
+  DISCORD_ENABLED = !!val;
+  localStorage.setItem('discordEnabled', DISCORD_ENABLED ? 'true' : 'false');
+  _applyDiscordToggleStyle();
+  showToast(DISCORD_ENABLED ? '🔔 Notificaciones Discord activadas' : '🔕 Notificaciones Discord desactivadas', 'ok');
+}
+
+function _applyDiscordToggleStyle() {
+  var row   = document.getElementById('discordToggleRow');
+  var label = row && row.querySelector('.discord-toggle-label');
+  var icon  = row && row.querySelector('.discord-toggle-icon');
+  if (!row) return;
+  if (DISCORD_ENABLED) {
+    if (label) label.style.color = '#5865F2';
+    if (icon)  icon.textContent  = '🔔';
+  } else {
+    if (label) label.style.color = '';
+    if (icon)  icon.textContent  = '🔕';
+  }
+}
+
 // ══ INIT ══════════════════════════════════════════
 (function init() {
+  initDiscordToggle();
   fetch('/api/status')
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -1125,7 +1185,7 @@ function crearEmpleado() {
   fetch('/api/empleados', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ nombre: nombre, identifier: identifier, rango: rango, recently_joined: recentlyJoined })
+    body: JSON.stringify({ nombre: nombre, identifier: identifier, rango: rango, recently_joined: recentlyJoined, discord: DISCORD_ENABLED })
   })
   .then(function(r) {
     if (r.status === 401) { handleUnauth(crearEmpleado); return null; }
@@ -1164,7 +1224,7 @@ function cambiarRango(id, nuevoRango) {
   fetch('/api/empleados/' + id, {
     method: 'PUT',
     headers: apiHeaders(),
-    body: JSON.stringify({ rango: nuevoRango })
+    body: JSON.stringify({ rango: nuevoRango, discord: DISCORD_ENABLED })
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -1807,7 +1867,7 @@ function parseSalaryConfig() {
   var btn = document.getElementById('btnParseSalary');
   btn.disabled = true; btn.textContent = 'Guardando...';
 
-  fetch('/api/salary-config', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ brackets: brackets }) })
+  fetch('/api/salary-config', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ brackets: brackets, discord: DISCORD_ENABLED }) })
     .then(function(r) {
       if (r.status === 401) { handleUnauth(parseSalaryConfig); return null; }
       return r.json();
@@ -2428,6 +2488,28 @@ async function generateSalaryExcel() {
   XLSX.writeFile(wb, 'liquidacion-'+ds+'.xlsx');
   showToast('✅ Excel descargado', 'ok');
 
+  // ── Notify Discord (webhook 1 — general) ──────────────────────────────
+  if (DISCORD_ENABLED) try { // eslint-disable-line
+    var discordRows = [];
+    for (var di = 0; di < SALARY_ROWS_STORE.length; di++) {
+      var dr = SALARY_ROWS_STORE[di], de = dr.emp;
+      var icM = 0; for (var dk = 0; dk < dr.sessions.length; dk++) icM += dr.sessions[dk].mins;
+      discordRows.push({
+        nombre: de.nombre,
+        rango:  de.rango,
+        icStr:  icM > 0 ? fmtTime(icM).str : '',
+        botStr: (de.bot_hours && de.bot_hours > 0) ? fmtTime(de.bot_hours).str : '',
+        salStr: (dr.salary > 0) ? dr.salary + 'M' : '',
+        fired:  !!FIRED_STORE[de.id]
+      });
+    }
+    fetch('/api/discord/resumen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: discordRows, totalSalary: totalSalary, empCount: empCount, semana: ds })
+    }).catch(function() {});
+  } catch (_) {}
+
   } catch(err) {
     showToast('❌ Error al generar Excel: '+err.message, 'err');
     console.error('generateSalaryExcel error:', err);
@@ -2454,7 +2536,7 @@ function addEmpleadoFromLog(idx) {
   fetch('/api/empleados', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ nombre: agent.name, identifier: identifier, rango: rango })
+    body: JSON.stringify({ nombre: agent.name, identifier: identifier, rango: rango, discord: DISCORD_ENABLED })
   })
   .then(function(r) {
     if (r.status === 401) { handleUnauth(function() { addEmpleadoFromLog(idx); }); return null; }

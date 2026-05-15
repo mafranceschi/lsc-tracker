@@ -2,11 +2,14 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
+const https   = require('https');
 
 const app       = express();
 const PORT      = process.env.PORT || 3000;
 const ENABLE_DB = process.env.ENABLE_DB === 'true';
-const API_KEY   = process.env.API_KEY   || '';
+const API_KEY           = process.env.API_KEY            || '';
+const DISCORD_WEBHOOK         = process.env.DISCORD_WEBHOOK_URL         || '';
+const DISCORD_WEBHOOK_SUELDOS = process.env.DISCORD_WEBHOOK_SUELDOS_URL || '';
 
 // Validar RETENTION_DAYS — si es inválido, usar 30 y avisar
 let RETENTION_DAYS = parseInt(process.env.RETENTION_DAYS || '30', 10);
@@ -140,6 +143,27 @@ function purge() {
   cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
   const { changes } = db.prepare('DELETE FROM logs WHERE saved_at < ?').run(cutoff.toISOString());
   if (changes > 0) console.log(`[DB] Purga: ${changes} log(s) > ${RETENTION_DAYS}d eliminados`);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DISCORD — envía un embed al webhook configurado
+// ══════════════════════════════════════════════════════════════
+function sendDiscord(payload, webhookUrl) {
+  const target = webhookUrl || DISCORD_WEBHOOK;
+  if (!target) return;
+  try {
+    const body = JSON.stringify(payload);
+    const url  = new URL(target);
+    const req  = https.request({
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, r => { r.resume(); if (r.statusCode >= 300) console.warn(`[Discord] HTTP ${r.statusCode}`); });
+    req.on('error', e => console.warn('[Discord] Error:', e.message));
+    req.write(body);
+    req.end();
+  } catch (e) { console.warn('[Discord] sendDiscord error:', e.message); }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -290,7 +314,7 @@ app.get('/api/empleados', auth, (_req, res) => {
 });
 
 app.post('/api/empleados', auth, (req, res) => {
-  const { nombre, identifier, rango, recently_joined } = req.body;
+  const { nombre, identifier, rango, recently_joined, discord } = req.body;
   if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'nombre es requerido' });
   const rangoFinal        = rango && RANGOS_VALIDOS.includes(rango) ? rango : 'experimentado';
   const recentlyJoinedAt  = recently_joined ? new Date().toISOString() : null;
@@ -302,6 +326,7 @@ app.post('/api/empleados', auth, (req, res) => {
     ).run(nombre.trim(), identifier ? identifier.trim() : null, rangoFinal, recentlyJoinedAt, now);
     const empleado = db.prepare('SELECT * FROM empleados WHERE id = ?').get(result.lastInsertRowid);
     console.log(`[DB] Empleado #${empleado.id} creado: ${empleado.nombre} (${empleado.rango})${recentlyJoinedAt ? ' [reciente]' : ''}`);
+    if (discord !== false) sendDiscord({ embeds: [{ color: 0x57F287, title: '🟢 Nuevo empleado agregado', fields: [{ name: 'Nombre', value: empleado.nombre, inline: true }, { name: 'Rango', value: empleado.rango, inline: true }], timestamp: new Date().toISOString(), footer: { text: 'LSC Tracker' } }] });
     res.json({ empleado });
   } catch (err) {
     console.error('[DB] Error al crear empleado:', err.message);
@@ -312,7 +337,7 @@ app.post('/api/empleados', auth, (req, res) => {
 app.put('/api/empleados/:id', auth, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
-  const { nombre, identifier, rango, recently_joined, bot_hours, bot_mins } = req.body;
+  const { nombre, identifier, rango, recently_joined, bot_hours, bot_mins, discord } = req.body;
   // bot_mins is the canonical field (total minutes); bot_hours is the column name (legacy)
   if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
   try {
@@ -331,6 +356,37 @@ app.put('/api/empleados/:id', auth, (req, res) => {
     db.prepare('UPDATE empleados SET nombre = ?, identifier = ?, rango = ?, recently_joined_at = ?, bot_hours = ? WHERE id = ?')
       .run(nuevoNombre, nuevoIdentifier, nuevoRango, nuevoRecentlyJoined, nuevoBotMins, id);
     const updated = db.prepare('SELECT * FROM empleados WHERE id = ?').get(id);
+    // Notify Discord only when non-bot fields changed
+    const nameChanged  = nuevoNombre     !== existing.nombre;
+    const rangoChanged = nuevoRango      !== existing.rango;
+    const identChanged = nuevoIdentifier !== existing.identifier;
+    if (nameChanged || rangoChanged || identChanged) {
+      const RANG_ORDER  = ['experimentado', 'ingeniero', 'subjefe', 'jefe', 'director'];
+      const RANG_LABEL  = { experimentado: 'Experimentado', ingeniero: 'Ingeniero', subjefe: 'Subjefe', jefe: 'Jefe', director: 'Director' };
+      const RANG_EMO    = { experimentado: '🌟', ingeniero: '🔧', subjefe: '⭐', jefe: '👑', director: '🏆' };
+
+      if (rangoChanged) {
+        const oldIdx  = RANG_ORDER.indexOf(existing.rango);
+        const newIdx  = RANG_ORDER.indexOf(nuevoRango);
+        const promoted = newIdx > oldIdx;
+        const label   = RANG_LABEL[nuevoRango] || nuevoRango;
+        const emo     = RANG_EMO[nuevoRango]   || '👤';
+
+        if (discord !== false) {
+          if (promoted) {
+            sendDiscord({ embeds: [{ color: 0x57F287, title: `🎉 ¡Felicitaciones, ${nuevoNombre}!`, description: `Ascendiste a **${emo} ${label}**.\n¡Seguí así, lo merecés!`, timestamp: new Date().toISOString(), footer: { text: 'LSC Tracker' } }] });
+          } else {
+            sendDiscord({ embeds: [{ color: 0xED4245, title: `😔 Lo sentimos, ${nuevoNombre}.`, description: `Has bajado a **${emo} ${label}**.`, timestamp: new Date().toISOString(), footer: { text: 'LSC Tracker' } }] });
+          }
+        }
+      } else if (discord !== false) {
+        // Solo cambio de nombre o identifier
+        const fields = [];
+        if (nameChanged)  fields.push({ name: 'Nombre',     value: `${existing.nombre} → ${nuevoNombre}`,              inline: false });
+        if (identChanged) fields.push({ name: 'Identifier', value: `${existing.identifier||'—'} → ${nuevoIdentifier||'—'}`, inline: true });
+        sendDiscord({ embeds: [{ color: 0xFEE75C, title: `✏️ Empleado modificado: ${nuevoNombre}`, fields, timestamp: new Date().toISOString(), footer: { text: 'LSC Tracker' } }] });
+      }
+    }
     res.json({ empleado: updated });
   } catch (err) {
     console.error('[DB] Error al actualizar empleado:', err.message);
@@ -367,7 +423,7 @@ app.get('/api/salary-config', auth, (_req, res) => {
 });
 
 app.post('/api/salary-config', auth, (req, res) => {
-  const { brackets } = req.body;
+  const { brackets, discord } = req.body;
   if (!Array.isArray(brackets)) return res.status(400).json({ error: 'brackets[] requerido' });
   if (!ENABLE_DB) return res.status(503).json({ error: 'DB desactivada' });
   try {
@@ -381,11 +437,80 @@ app.post('/api/salary-config', auth, (req, res) => {
     })();
     const saved = db.prepare('SELECT * FROM salary_config ORDER BY rango, min_hrs').all();
     console.log(`[DB] Salary config actualizada: ${saved.length} tramo(s)`);
+
+    // Notify Discord — escala salarial actualizada
+    if (discord !== false && DISCORD_WEBHOOK_SUELDOS && saved.length) {
+      const RANG_LABEL = { director: '🏆 Director', jefe: '👑 Jefe', subjefe: '⭐ Subjefe', ingeniero: '🔧 Ingeniero', experimentado: '🌟 Experimentado' };
+      const RANG_ORDER = ['director', 'jefe', 'subjefe', 'ingeniero', 'experimentado'];
+      // group by rango
+      const grouped = {};
+      for (const b of saved) {
+        if (!grouped[b.rango]) grouped[b.rango] = [];
+        grouped[b.rango].push(b);
+      }
+      const fields = [];
+      for (const rango of RANG_ORDER) {
+        if (!grouped[rango]) continue;
+        const tiers = grouped[rango]
+          .sort((a, b) => a.min_hrs - b.min_hrs)
+          .map(b => `${b.display || `${b.min_hrs}h`} → **${b.amount}M**`)
+          .join('\n');
+        fields.push({ name: RANG_LABEL[rango] || rango, value: tiers, inline: true });
+      }
+      sendDiscord({
+        embeds: [{
+          color:     0xFFC000,
+          title:     '💵 Escala Salarial actualizada',
+          fields,
+          timestamp: new Date().toISOString(),
+          footer:    { text: 'LSC Tracker' }
+        }]
+      }, DISCORD_WEBHOOK_SUELDOS);
+    }
+
     res.json({ saved: true, brackets: saved });
   } catch (err) {
     console.error('[DB] Error al guardar salary config:', err.message);
     res.status(500).json({ error: 'Error interno al guardar configuración salarial' });
   }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  DISCORD — resumen semanal
+// ══════════════════════════════════════════════════════════════
+app.post('/api/discord/resumen', auth, (req, res) => {
+  if (!DISCORD_WEBHOOK) return res.status(503).json({ error: 'Discord webhook no configurado' });
+  const { rows, totalSalary, empCount, semana } = req.body;
+  if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows[] requerido' });
+
+  const EMOS = { director: '🏆', jefe: '👑', subjefe: '⭐', ingeniero: '🔧', experimentado: '🔵' };
+  let desc = '';
+  for (const r of rows) {
+    const emo   = EMOS[r.rango] || '👤';
+    const parts = [];
+    if (r.icStr)  parts.push(`IC: ${r.icStr}`);
+    if (r.botStr) parts.push(`BOT: ${r.botStr}`);
+    if (r.salStr) parts.push(`💰 ${r.salStr}`);
+    const detail = parts.length ? ` — ${parts.join(' · ')}` : '';
+    const fired  = r.fired ? ' ~~(Despedido)~~' : '';
+    desc += `${emo} **${r.nombre}**${detail}${fired}\n`;
+  }
+
+  sendDiscord({
+    embeds: [{
+      color:       0x5865F2,
+      title:       `📊 Resumen Semanal LSC${semana ? ` — ${semana}` : ''}`,
+      description: desc.slice(0, 4096) || '(sin datos)',
+      fields: [
+        { name: '👥 Empleados activos', value: String(empCount || 0), inline: true },
+        { name: '💵 Total sueldos',      value: `${totalSalary || 0}M`,  inline: true }
+      ],
+      timestamp: new Date().toISOString(),
+      footer:    { text: 'LSC Tracker' }
+    }]
+  });
+
+  res.json({ ok: true });
 });
 
 app.get('*', (_req, res) => {
