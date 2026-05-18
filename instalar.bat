@@ -26,24 +26,38 @@ set "CLONE_DIR=%TEMP%\lsc-tracker-latest"
 :: ----------------------------------------
 echo  [0/5] Descargando ultima version desde GitHub...
 :: ----------------------------------------
+set "SRC_DIR=%~dp0"
+if "%SRC_DIR:~-1%"=="\" set "SRC_DIR=%SRC_DIR:~0,-1%"
+set "ZIP_URL=https://github.com/mafranceschi/lsc-tracker/archive/refs/heads/main.zip"
+set "ZIP_FILE=%TEMP%\lsc-tracker-main.zip"
+set "ZIP_EXTRACT=%TEMP%\lsc-tracker-zip"
+
 git --version >nul 2>&1
 if %errorlevel% == 0 (
-    echo        Git encontrado. Clonando repositorio...
+    echo        Usando git...
     if exist "%CLONE_DIR%" rmdir /s /q "%CLONE_DIR%"
     git clone --depth 1 %REPO_URL% "%CLONE_DIR%" >nul 2>&1
     if !errorlevel! == 0 (
         set "SRC_DIR=%CLONE_DIR%"
-        echo        OK: Ultima version descargada desde GitHub
-    ) else (
-        echo        AVISO: Sin internet. Usando archivos locales.
-        set "SRC_DIR=%~dp0"
-        if "!SRC_DIR:~-1!"=="\" set "SRC_DIR=!SRC_DIR:~0,-1!"
+        echo        OK: Descargado con git
+        goto :UPDATE_DONE
     )
-) else (
-    echo        AVISO: Git no instalado. Usando archivos locales.
-    set "SRC_DIR=%~dp0"
-    if "%SRC_DIR:~-1%"=="\" set "SRC_DIR=%SRC_DIR:~0,-1%"
+    echo        AVISO: git fallo. Intentando con descarga ZIP...
 )
+
+echo        Descargando ZIP desde GitHub...
+if exist "%ZIP_EXTRACT%" rmdir /s /q "%ZIP_EXTRACT%"
+powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%ZIP_URL%' -OutFile '%ZIP_FILE%' -UseBasicParsing; Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%ZIP_EXTRACT%' -Force; exit 0 } catch { exit 1 }" >nul 2>&1
+if %errorlevel% == 0 (
+    set "SRC_DIR=%ZIP_EXTRACT%\lsc-tracker-main"
+    del "%ZIP_FILE%" >nul 2>&1
+    echo        OK: Descargado con PowerShell
+    goto :UPDATE_DONE
+)
+
+echo        AVISO: Sin internet. Usando archivos locales.
+
+:UPDATE_DONE
 echo.
 
 :: Verificar que la fuente es valida
@@ -173,8 +187,9 @@ if exist "%INSTALL_DIR%\.env.local" (
     echo        OK: Configuracion por defecto aplicada
 )
 
-:: Limpiar clone temporal
-if exist "%CLONE_DIR%" rmdir /s /q "%CLONE_DIR%" >nul 2>&1
+:: Limpiar temporales
+if exist "%CLONE_DIR%"  rmdir /s /q "%CLONE_DIR%"  >nul 2>&1
+if exist "%ZIP_EXTRACT%" rmdir /s /q "%ZIP_EXTRACT%" >nul 2>&1
 echo.
 
 echo  ==========================================
