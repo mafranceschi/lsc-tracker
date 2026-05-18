@@ -18,16 +18,39 @@ echo       INSTALADOR LSC TRACKER
 echo  ==========================================
 echo.
 
-set "SRC_DIR=%~dp0"
-if "%SRC_DIR:~-1%"=="\" set "SRC_DIR=%SRC_DIR:~0,-1%"
 set "INSTALL_DIR=C:\LSC-Tracker"
 set "DESKTOP_FOLDER=%PUBLIC%\Desktop\LSC Tracker"
+set "REPO_URL=https://github.com/mafranceschi/lsc-tracker.git"
+set "CLONE_DIR=%TEMP%\lsc-tracker-latest"
 
-:: Verificar que estamos en la carpeta correcta
+:: ----------------------------------------
+echo  [0/5] Descargando ultima version desde GitHub...
+:: ----------------------------------------
+git --version >nul 2>&1
+if %errorlevel% == 0 (
+    echo        Git encontrado. Clonando repositorio...
+    if exist "%CLONE_DIR%" rmdir /s /q "%CLONE_DIR%"
+    git clone --depth 1 %REPO_URL% "%CLONE_DIR%" >nul 2>&1
+    if !errorlevel! == 0 (
+        set "SRC_DIR=%CLONE_DIR%"
+        echo        OK: Ultima version descargada desde GitHub
+    ) else (
+        echo        AVISO: Sin internet. Usando archivos locales.
+        set "SRC_DIR=%~dp0"
+        if "!SRC_DIR:~-1!"=="\" set "SRC_DIR=!SRC_DIR:~0,-1!"
+    )
+) else (
+    echo        AVISO: Git no instalado. Usando archivos locales.
+    set "SRC_DIR=%~dp0"
+    if "%SRC_DIR:~-1%"=="\" set "SRC_DIR=%SRC_DIR:~0,-1%"
+)
+echo.
+
+:: Verificar que la fuente es valida
 if not exist "%SRC_DIR%\backend\server.js" (
     echo.
-    echo  ERROR: No se encontro la carpeta backend junto a este archivo.
-    echo  Ejecuta instalar.bat desde DENTRO de la carpeta extraida del ZIP.
+    echo  ERROR: No se encontro la carpeta backend.
+    echo  Verifica tu conexion a internet o ejecuta desde la carpeta del ZIP.
     echo.
     pause
     exit /b 1
@@ -35,24 +58,6 @@ if not exist "%SRC_DIR%\backend\server.js" (
 
 echo  Fuente: %SRC_DIR%
 echo  Destino: %INSTALL_DIR%
-echo.
-
-:: ----------------------------------------
-echo  [0/5] Actualizando desde el repositorio...
-:: ----------------------------------------
-git --version >nul 2>&1
-if %errorlevel% == 0 (
-    cd /d "%SRC_DIR%"
-    echo        Git encontrado. Bajando ultimos cambios...
-    git pull --ff-only origin main >nul 2>&1
-    if !errorlevel! == 0 (
-        echo        OK: Repositorio actualizado
-    ) else (
-        echo        AVISO: No se pudo actualizar ^(sin internet o conflicto^). Usando version local.
-    )
-) else (
-    echo        AVISO: Git no instalado. Usando version local del archivo.
-)
 echo.
 
 :: ----------------------------------------
@@ -160,13 +165,16 @@ echo.
 :: ----------------------------------------
 echo  [5/5] Protegiendo configuracion local...
 :: ----------------------------------------
-:: Si ya existe un .env con configuracion propia, NO lo pisamos
+:: Si ya existe un .env.local con configuracion propia, lo restauramos
 if exist "%INSTALL_DIR%\.env.local" (
     copy /y "%INSTALL_DIR%\.env.local" "%INSTALL_DIR%\.env" >nul
     echo        OK: Configuracion local restaurada desde .env.local
 ) else (
     echo        OK: Configuracion por defecto aplicada
 )
+
+:: Limpiar clone temporal
+if exist "%CLONE_DIR%" rmdir /s /q "%CLONE_DIR%" >nul 2>&1
 echo.
 
 echo  ==========================================
