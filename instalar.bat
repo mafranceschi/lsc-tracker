@@ -40,8 +40,11 @@ if not %errorlevel% == 0 goto :SIN_INTERNET
 if not exist "%ZIP_FILE%" goto :SIN_INTERNET
 
 echo        Extrayendo...
-powershell -NoProfile -Command "Expand-Archive -LiteralPath '%ZIP_FILE%' -DestinationPath '%ZIP_EXTRACT%' -Force" >nul 2>&1
-
+mkdir "%ZIP_EXTRACT%" >nul 2>&1
+tar -xf "%ZIP_FILE%" -C "%ZIP_EXTRACT%" >nul 2>&1
+if not %errorlevel% == 0 (
+    powershell -NoProfile -Command "Expand-Archive -LiteralPath '%ZIP_FILE%' -DestinationPath '%ZIP_EXTRACT%' -Force" >nul 2>&1
+)
 if not %errorlevel% == 0 goto :SIN_INTERNET
 
 set "SRC_DIR=%ZIP_EXTRACT%\lsc-tracker-main"
