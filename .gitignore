@@ -2,6 +2,9 @@
 node_modules/
 backend/node_modules/
 
+# Variables de entorno (contienen webhooks privados)
+.env
+
 # Base de datos local (no compartir)
 backend/data/
 *.db

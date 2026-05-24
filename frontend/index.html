@@ -629,6 +629,39 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 .salary-log-date { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--accent2); }
 .salary-log-summary { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-top: 0.1rem; }
 
+/* Day groups – Historial */
+.hist-day-group { margin-bottom: 1rem; }
+.hist-day-header {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.6rem 1rem; cursor: pointer; border-radius: 10px;
+  user-select: none;
+  background: rgba(var(--accentRGB),0.06);
+  border: 1px solid rgba(var(--accentRGB),0.14);
+  margin-bottom: 0.5rem; transition: background 0.15s, border-color 0.15s;
+}
+.hist-day-header:hover { background: rgba(var(--accentRGB),0.11); border-color: rgba(var(--accentRGB),0.25); }
+.hist-day-chev { font-size: 0.55rem; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
+.hist-day-label { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; color: var(--text); font-weight: 600; flex: 1; }
+.hist-day-count { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--muted); flex-shrink: 0; }
+.hist-day-body { padding-left: 0; }
+.hist-day-group.collapsed .hist-day-body { display: none; }
+.hist-day-group.collapsed .hist-day-chev { transform: rotate(-90deg); }
+
+/* Day groups – Sueldos log selector */
+.salary-day-group { margin-bottom: 0.75rem; }
+.salary-day-header {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.55rem 0.85rem; border-radius: 9px;
+  background: rgba(var(--accentRGB),0.06);
+  border: 1px solid rgba(var(--accentRGB),0.14);
+  margin-bottom: 0.25rem; transition: background 0.15s;
+}
+.salary-day-header:hover { background: rgba(var(--accentRGB),0.11); }
+.salary-day-check { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; cursor: pointer; }
+.salary-day-label { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text); font-weight: 600; flex: 1; cursor: pointer; }
+.salary-day-count { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); flex-shrink: 0; }
+.salary-day-body { padding-left: 0.5rem; }
+
 .salary-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .salary-table th {
   text-align: left; padding: 0.6rem 1rem;
@@ -1507,6 +1540,15 @@ function fmtDate(isoStr) {
   var d = new Date(isoStr), p = function(n){return String(n).padStart(2,'0');};
   return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' · '+p(d.getHours())+':'+p(d.getMinutes());
 }
+var MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function dayKeyOf(isoStr) {
+  var d = new Date(isoStr);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function dayLabelOf(isoStr) {
+  var d = new Date(isoStr);
+  return d.getDate()+' de '+MONTH_NAMES_ES[d.getMonth()]+' · '+d.getFullYear();
+}
 
 function renderResult(agents, sessionCount) {
   var total = 0;
@@ -1617,30 +1659,54 @@ function loadHistory() {
         if (logs.length === 0) {
           listEl.innerHTML = '<div class="empty"><span class="icon">📫</span><p>No hay registros guardados aún.</p></div>'; return;
         }
-        var html = '';
+        // Group logs by day (newest day first)
+        var dayGroups = [], dayMap = {};
         for (var i = 0; i < logs.length; i++) {
-          var log = logs[i], agents = log.agents, totalMins = 0;
-          for (var j = 0; j < agents.length; j++) totalMins += agents[j].totalMins;
-          var tt = fmtTime(totalMins);
-          var summary = agents.length + ' agente' + (agents.length !== 1 ? 's' : '') + ' · log #' + log.id + ' · ' + tt.str + ' total';
-          var agentRows = '';
-          for (var j = 0; j < agents.length; j++) {
-            var a = agents[j], at = fmtTime(a.totalMins), sp = '';
-            for (var k = 0; k < a.sessions.length; k++) {
-              var s = a.sessions[k], cls = s.tipo.indexOf('Desconex') >= 0 ? 'dc' : 'sv', lbl = s.tipo.indexOf('Desconex') >= 0 ? '↓' : '↑';
-              sp += '<span class="pill ' + cls + '">' + lbl + ' ' + fmtTime(s.mins).str + '</span>';
+          var dk = dayKeyOf(logs[i].savedAt);
+          if (!dayMap[dk]) { dayMap[dk] = []; dayGroups.push(dk); }
+          dayMap[dk].push(logs[i]);
+        }
+        dayGroups.sort().reverse();
+
+        var html = '';
+        for (var d = 0; d < dayGroups.length; d++) {
+          var dk = dayGroups[d];
+          var dayLogs = dayMap[dk];
+          var cnt = dayLogs.length;
+          html += '<div class="hist-day-group" data-day="' + dk + '">'
+            + '<div class="hist-day-header" onclick="toggleDayGroup(\'' + dk + '\')">'
+            + '<span class="hist-day-chev">▼</span>'
+            + '<span class="hist-day-label">📅 ' + esc(dayLabelOf(dayLogs[0].savedAt)) + '</span>'
+            + '<span class="hist-day-count">' + cnt + ' ' + (cnt === 1 ? 'análisis' : 'análisis') + '</span>'
+            + '</div>'
+            + '<div class="hist-day-body">';
+
+          for (var i = 0; i < dayLogs.length; i++) {
+            var log = dayLogs[i], agents = log.agents, totalMins = 0;
+            for (var j = 0; j < agents.length; j++) totalMins += agents[j].totalMins;
+            var tt = fmtTime(totalMins);
+            var summary = agents.length + ' agente' + (agents.length !== 1 ? 's' : '') + ' · log #' + log.id + ' · ' + tt.str + ' total';
+            var agentRows = '';
+            for (var j = 0; j < agents.length; j++) {
+              var a = agents[j], at = fmtTime(a.totalMins), sp = '';
+              for (var k = 0; k < a.sessions.length; k++) {
+                var s = a.sessions[k], cls = s.tipo.indexOf('Desconex') >= 0 ? 'dc' : 'sv', lbl = s.tipo.indexOf('Desconex') >= 0 ? '↓' : '↑';
+                sp += '<span class="pill ' + cls + '">' + lbl + ' ' + fmtTime(s.mins).str + '</span>';
+              }
+              agentRows += '<div class="hist-agent"><span class="ha-name">' + esc(a.name) + '</span><span class="ha-mins">' + at.str + '</span>' + (sp ? '<div class="ha-pills">' + sp + '</div>' : '') + '</div>';
             }
-            agentRows += '<div class="hist-agent"><span class="ha-name">' + esc(a.name) + '</span><span class="ha-mins">' + at.str + '</span>' + (sp ? '<div class="ha-pills">' + sp + '</div>' : '') + '</div>';
+            html += '<div class="hist-entry" data-logid="' + log.id + '">'
+              + '<div class="hist-entry-head">'
+              + '<div class="hist-check-wrap"><input type="checkbox" class="hist-check" data-logid="' + log.id + '" onchange="toggleLogSelection(' + log.id + ', this)"></div>'
+              + '<div class="hist-head-clickable">'
+              + '<div class="hist-meta"><div class="hist-date">' + esc(fmtDate(log.savedAt)) + '</div><div class="hist-summary">' + esc(summary) + '</div></div>'
+              + '<span class="hist-chev">▼</span>'
+              + '</div></div>'
+              + '<div class="hist-body"><div class="hist-agents">' + agentRows + '</div></div>'
+              + '</div>';
           }
-          html += '<div class="hist-entry" data-logid="' + log.id + '">'
-            + '<div class="hist-entry-head">'
-            + '<div class="hist-check-wrap"><input type="checkbox" class="hist-check" data-logid="' + log.id + '" onchange="toggleLogSelection(' + log.id + ', this)"></div>'
-            + '<div class="hist-head-clickable">'
-            + '<div class="hist-meta"><div class="hist-date">' + esc(fmtDate(log.savedAt)) + '</div><div class="hist-summary">' + esc(summary) + '</div></div>'
-            + '<span class="hist-chev">▼</span>'
-            + '</div></div>'
-            + '<div class="hist-body"><div class="hist-agents">' + agentRows + '</div></div>'
-            + '</div>';
+
+          html += '</div></div>'; // close hist-day-body and hist-day-group
         }
         listEl.innerHTML = html;
         listEl.onclick = function(e) {
@@ -1702,6 +1768,11 @@ function clearSelection() {
   // Return to list if in combined view
   var cv = document.getElementById('combinedView');
   if (cv && cv.style.display !== 'none') backToHistory();
+}
+
+function toggleDayGroup(day) {
+  var group = document.querySelector('.hist-day-group[data-day="' + day + '"]');
+  if (group) group.classList.toggle('collapsed');
 }
 
 function showCombined() {
@@ -2028,17 +2099,41 @@ function loadSalaryLogs() {
         return;
       }
       SALARY_LOG_DATA_S = data.logs;
-      var html = '';
+      // Group by day, newest first
+      var sDayGroups = [], sDayMap = {};
       for (var i = 0; i < data.logs.length; i++) {
-        var log = data.logs[i], totalMins = 0;
-        for (var j = 0; j < log.agents.length; j++) totalMins += log.agents[j].totalMins;
-        var tt = fmtTime(totalMins);
-        html += '<div class="salary-log-item" data-logid="' + log.id + '">'
-          + '<input type="checkbox" onchange="toggleSalaryLog(' + log.id + ', this)">'
-          + '<div class="salary-log-info" onclick="this.previousElementSibling.click()">'
-          + '<div class="salary-log-date">' + esc(fmtDate(log.savedAt)) + '</div>'
-          + '<div class="salary-log-summary">log #' + log.id + ' · ' + log.agents.length + ' agentes · ' + tt.str + ' total</div>'
-          + '</div></div>';
+        var sdk = dayKeyOf(data.logs[i].savedAt);
+        if (!sDayMap[sdk]) { sDayMap[sdk] = []; sDayGroups.push(sdk); }
+        sDayMap[sdk].push(data.logs[i]);
+      }
+      sDayGroups.sort().reverse();
+
+      var html = '';
+      for (var d = 0; d < sDayGroups.length; d++) {
+        var sdk = sDayGroups[d];
+        var sdLogs = sDayMap[sdk];
+        var sdCnt = sdLogs.length;
+        html += '<div class="salary-day-group">'
+          + '<div class="salary-day-header">'
+          + '<input type="checkbox" class="salary-day-check" data-day="' + sdk + '" onchange="toggleSalaryDay(\'' + sdk + '\', this)">'
+          + '<span class="salary-day-label" onclick="this.previousElementSibling.click()">📅 ' + esc(dayLabelOf(sdLogs[0].savedAt)) + '</span>'
+          + '<span class="salary-day-count">' + sdCnt + ' log' + (sdCnt !== 1 ? 's' : '') + '</span>'
+          + '</div>'
+          + '<div class="salary-day-body">';
+
+        for (var i = 0; i < sdLogs.length; i++) {
+          var log = sdLogs[i], totalMins = 0;
+          for (var j = 0; j < log.agents.length; j++) totalMins += log.agents[j].totalMins;
+          var tt = fmtTime(totalMins);
+          html += '<div class="salary-log-item" data-logid="' + log.id + '" data-day="' + sdk + '">'
+            + '<input type="checkbox" onchange="toggleSalaryLog(' + log.id + ', this)">'
+            + '<div class="salary-log-info" onclick="this.previousElementSibling.click()">'
+            + '<div class="salary-log-date">log #' + log.id + ' · ' + esc(fmtDate(log.savedAt).split(' · ')[1] || '') + '</div>'
+            + '<div class="salary-log-summary">' + log.agents.length + ' agentes · ' + tt.str + ' total</div>'
+            + '</div></div>';
+        }
+
+        html += '</div></div>'; // close salary-day-body and salary-day-group
       }
       wrap.innerHTML = html;
     })
@@ -2060,6 +2155,46 @@ function toggleSalaryLog(logId, checkbox) {
   } else {
     delete selectedSalaryLogs[logId];
     if (item) item.classList.remove('sel');
+  }
+  // Sync the day-group checkbox
+  var dayKey = item ? item.getAttribute('data-day') : null;
+  if (dayKey) {
+    var dayChk = document.querySelector('.salary-day-check[data-day="' + dayKey + '"]');
+    if (dayChk) {
+      var dayItems = document.querySelectorAll('.salary-log-item[data-day="' + dayKey + '"]');
+      var allChk = true, noneChk = true;
+      for (var i = 0; i < dayItems.length; i++) {
+        var c = dayItems[i].querySelector('input[type="checkbox"]');
+        if (c && c.checked) noneChk = false; else allChk = false;
+      }
+      dayChk.checked = allChk;
+      dayChk.indeterminate = !allChk && !noneChk;
+    }
+  }
+  updateSalarySelCount();
+}
+
+function toggleSalaryDay(day, checkbox) {
+  var items = document.querySelectorAll('.salary-log-item[data-day="' + day + '"]');
+  for (var i = 0; i < items.length; i++) {
+    var logId = parseInt(items[i].getAttribute('data-logid'), 10);
+    var chk = items[i].querySelector('input[type="checkbox"]');
+    if (chk && chk.checked !== checkbox.checked) {
+      chk.checked = checkbox.checked;
+      // Call without day-sync to avoid loop; update manually
+      var log = null;
+      for (var k = 0; k < SALARY_LOG_DATA_S.length; k++) {
+        if (SALARY_LOG_DATA_S[k].id === logId) { log = SALARY_LOG_DATA_S[k]; break; }
+      }
+      if (!log) continue;
+      if (checkbox.checked) {
+        selectedSalaryLogs[logId] = log;
+        items[i].classList.add('sel');
+      } else {
+        delete selectedSalaryLogs[logId];
+        items[i].classList.remove('sel');
+      }
+    }
   }
   updateSalarySelCount();
 }
