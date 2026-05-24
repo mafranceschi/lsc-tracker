@@ -2538,11 +2538,11 @@ async function generateSalaryExcel() {
     }};
   }
 
-  // ── Plantilla column layout (9 cols, same as original) ────────────────
-  // A=margin  B=COMENTARIOS  C=MECANICOS  D=SERVICIO BOT(blank)
-  // E=SERVICIO IC  F=SUELDO  G=AUSENCIA  H=IDENTIFIER  I=blank
-  var NCOLS = 9;
-  var CA=0, CB=1, CC=2, CD=3, CE=4, CF=5, CG=6, CH=7, CI=8;
+  // ── Plantilla column layout (10 cols) ─────────────────────────────────
+  // A=margin  B=COMENTARIOS  C=MECANICOS  D=SERVICIO BOT
+  // E=SERVICIO IC  F=SUELDO  G=FACTURACION  H=AUSENCIA  I=IDENTIFIER  J=blank
+  var NCOLS = 10;
+  var CA=0, CB=1, CC=2, CD=3, CE=4, CF=5, CF2=6, CG=7, CH=8, CI=9;
 
   // ── Clear rows 0–18 (Excel 1–19, the employee section) ────────────────
   for (var r = 0; r <= 18; r++) {
@@ -2550,15 +2550,16 @@ async function generateSalaryExcel() {
   }
 
   // ── Row 0: headers ────────────────────────────────────────────────────
-  sc(0,CA, emptyCell(CLR_WHITE));
-  sc(0,CB, hdrCell('COMENTARIOS'));
-  sc(0,CC, hdrCell('MECANICOS'));
-  sc(0,CD, hdrCell('SERVICIO BOT'));
-  sc(0,CE, hdrCell('SERVICIO IC'));
-  sc(0,CF, hdrCell('SUELDO'));
-  sc(0,CG, hdrCell('AUSENCIA'));
-  sc(0,CH, hdrCell('IDENTIFIER'));
-  sc(0,CI, emptyCell(CLR_WHITE));
+  sc(0,CA,  emptyCell(CLR_WHITE));
+  sc(0,CB,  hdrCell('COMENTARIOS'));
+  sc(0,CC,  hdrCell('MECANICOS'));
+  sc(0,CD,  hdrCell('SERVICIO BOT'));
+  sc(0,CE,  hdrCell('SERVICIO IC'));
+  sc(0,CF,  hdrCell('SUELDO'));
+  sc(0,CF2, hdrCell('FACTURACION'));
+  sc(0,CG,  hdrCell('AUSENCIA'));
+  sc(0,CH,  hdrCell('IDENTIFIER'));
+  sc(0,CI,  emptyCell(CLR_WHITE));
 
   // ── Employee of the week ──────────────────────────────────────────────
   var eow = null, maxMins = -1;
@@ -2604,16 +2605,20 @@ async function generateSalaryExcel() {
     if (!fired) { totalSalary += row.salary; empCount++; }
     var salStr = fired ? '' : (reachedMin ? row.salary+'M' : '');
 
-    var botStr = (e.bot_hours && e.bot_hours > 0) ? fmtTime(e.bot_hours).str : '';
-    sc(curRow,CA, emptyCell(CLR_WHITE));
-    sc(curRow,CB, dataCell(comentario, fill, !!comentario, 'left'));
-    sc(curRow,CC, dataCell(mechStr,    fill, false,        'left'));
-    sc(curRow,CD, dataCell(botStr,     fill, false,        'center'));
-    sc(curRow,CE, dataCell(icStr,      fill, false,        'center'));
-    sc(curRow,CF, dataCell(salStr,     fill, reachedMin,   'center'));
-    sc(curRow,CG, emptyCell(fill));
-    sc(curRow,CH, dataCell(e.identifier||'', fill, false,  'left'));
-    sc(curRow,CI, emptyCell(fill));
+    var botStr  = (e.bot_hours && e.bot_hours > 0) ? fmtTime(e.bot_hours).str : '';
+    var bk      = e.nombre.trim().toLowerCase();
+    var bd      = BILLING_STORE[bk];
+    var factStr = bd ? fmtPesos(bd.total) : '';
+    sc(curRow,CA,  emptyCell(CLR_WHITE));
+    sc(curRow,CB,  dataCell(comentario, fill, !!comentario, 'left'));
+    sc(curRow,CC,  dataCell(mechStr,    fill, false,        'left'));
+    sc(curRow,CD,  dataCell(botStr,     fill, false,        'center'));
+    sc(curRow,CE,  dataCell(icStr,      fill, false,        'center'));
+    sc(curRow,CF,  dataCell(salStr,     fill, reachedMin,   'center'));
+    sc(curRow,CF2, dataCell(factStr,    fill, !!factStr,    'right'));
+    sc(curRow,CG,  emptyCell(fill));
+    sc(curRow,CH,  dataCell(e.identifier||'', fill, false,  'left'));
+    sc(curRow,CI,  emptyCell(fill));
     curRow++;
   }
 
@@ -2631,15 +2636,17 @@ async function generateSalaryExcel() {
       font: { bold:!!bright, color:{rgb: bright?'C0C0C0':'888888'}, name:'Calibri', sz:11 }
     }};
   }
-  sc(curRow,CA, emptyCell(CLR_WHITE));
-  sc(curRow,CB, sumCell(''));
-  sc(curRow,CC, sumCell('Total Empleados: '+empCount, true));
-  sc(curRow,CD, sumCell(''));
-  sc(curRow,CE, sumCell(''));
-  sc(curRow,CF, sumCell('Total Sueldos:'+totalSalary+'M', true));
-  sc(curRow,CG, sumCell(''));
-  sc(curRow,CH, sumCell(''));
-  sc(curRow,CI, sumCell(''));
+  var grandFact = Object.keys(BILLING_STORE).reduce(function(s,k){ return s + BILLING_STORE[k].total; }, 0);
+  sc(curRow,CA,  emptyCell(CLR_WHITE));
+  sc(curRow,CB,  sumCell(''));
+  sc(curRow,CC,  sumCell('Total Empleados: '+empCount, true));
+  sc(curRow,CD,  sumCell(''));
+  sc(curRow,CE,  sumCell(''));
+  sc(curRow,CF,  sumCell('Total Sueldos:'+totalSalary+'M', true));
+  sc(curRow,CF2, sumCell(grandFact > 0 ? 'Total: '+fmtPesos(grandFact) : '', grandFact > 0));
+  sc(curRow,CG,  sumCell(''));
+  sc(curRow,CH,  sumCell(''));
+  sc(curRow,CI,  sumCell(''));
   curRow++;
 
   // ── Pad with empty rows until row 19 (FACTURACION stays at row 20) ────
