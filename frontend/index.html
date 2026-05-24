@@ -2182,6 +2182,17 @@ function renderSalaryResult(rows, unmatched, logs) {
     }
   }
 
+  // EOW gets salary of next rank up
+  var RANG_UP = { experimentado:'ingeniero', ingeniero:'subjefe', subjefe:'jefe', jefe:'director', director:'director' };
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].emp.id === eow) {
+      var rangoUp = RANG_UP[rows[i].emp.rango] || rows[i].emp.rango;
+      rows[i].salary    = calcSalaryAmount(rangoUp, rows[i].totalMins, SALARY_CONFIG);
+      rows[i].eowRango  = rangoUp; // for display
+      break;
+    }
+  }
+
   var totalSalary = rows.reduce(function(sum, r) { return FIRED_STORE[r.emp.id] ? sum : sum + r.salary; }, 0);
   var withSalary  = rows.filter(function(r) { return !FIRED_STORE[r.emp.id] && r.salary > 0; }).length;
 
@@ -2224,7 +2235,9 @@ function renderSalaryResult(rows, unmatched, logs) {
     else if (isRecentEmployee(e))   rowBg = 'background:rgba(255,217,102,0.08)';
     else if (r.salary > 0)          rowBg = 'background:rgba(146,208,80,0.06)';
 
-    var salaryTxt, salaryCls;
+    var salaryTxt, salaryCls, salaryNote;
+    salaryNote = (e.id === eow && r.eowRango && r.eowRango !== e.rango)
+      ? '<div style="font-size:0.58rem;color:#00b050;margin-top:2px">★ cobro como ' + r.eowRango + '</div>' : '';
     if (FIRED_STORE[e.id])  { salaryTxt = '— despedido'; salaryCls = 'zero'; }
     else if (r.salary > 0)  { salaryTxt = r.salary + 'M'; salaryCls = ''; }
     else if (r.totalMins === 0) { salaryTxt = '— sin horas'; salaryCls = 'zero'; }
@@ -2242,7 +2255,7 @@ function renderSalaryResult(rows, unmatched, logs) {
       + '<td><span class="rank-badge ' + cfg.cls + '">' + cfg.icon + ' ' + cfg.label + '</span></td>'
       + '<td><span class="salary-hours">' + (r.totalMins > 0 ? t.str : '<span style="color:var(--muted)">—</span>') + '</span></td>'
       + '<td style="text-align:center">' + (e.bot_hours > 0 ? '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.78rem;font-weight:700;color:#22d3ee">' + fmtTime(e.bot_hours).str + '</span>' : '<span style="color:var(--muted);font-size:0.75rem">—</span>') + '</td>'
-      + '<td><span class="salary-amount ' + salaryCls + '">' + salaryTxt + '</span></td>'
+      + '<td><span class="salary-amount ' + salaryCls + '">' + salaryTxt + '</span>' + salaryNote + '</td>'
       + (Object.keys(BILLING_STORE).length ? (function(){
           var bk = e.nombre.trim().toLowerCase();
           var bd = BILLING_STORE[bk];
@@ -2402,11 +2415,24 @@ function updateSalaryRowStyle(empId) {
   if (!rowData) return;
 
   var e = rowData.emp;
-  // Recalculate eow
+  // Recalculate eow and re-apply rank-up bonus across all rows
+  var RANG_UP2 = { experimentado:'ingeniero', ingeniero:'subjefe', subjefe:'jefe', jefe:'director', director:'director' };
   var eow = null, maxMins = -1;
   for (var j = 0; j < SALARY_ROWS_STORE.length; j++) {
+    // Reset to base salary first
+    SALARY_ROWS_STORE[j].salary   = calcSalaryAmount(SALARY_ROWS_STORE[j].emp.rango, SALARY_ROWS_STORE[j].totalMins, SALARY_CONFIG);
+    SALARY_ROWS_STORE[j].eowRango = null;
     if (!FIRED_STORE[SALARY_ROWS_STORE[j].emp.id] && SALARY_ROWS_STORE[j].totalMins > maxMins) {
       maxMins = SALARY_ROWS_STORE[j].totalMins; eow = SALARY_ROWS_STORE[j].emp.id;
+    }
+  }
+  // Apply rank-up bonus to new eow
+  for (var j = 0; j < SALARY_ROWS_STORE.length; j++) {
+    if (SALARY_ROWS_STORE[j].emp.id === eow) {
+      var ru = RANG_UP2[SALARY_ROWS_STORE[j].emp.rango] || SALARY_ROWS_STORE[j].emp.rango;
+      SALARY_ROWS_STORE[j].salary   = calcSalaryAmount(ru, SALARY_ROWS_STORE[j].totalMins, SALARY_CONFIG);
+      SALARY_ROWS_STORE[j].eowRango = ru;
+      break;
     }
   }
 
@@ -2424,10 +2450,21 @@ function updateSalaryRowStyle(empId) {
   else if (noReachUI)          row.style.background = 'rgba(255,153,102,0.10)';
   else                         row.style.background = '';
 
-  // Salary text
+  // Salary text + eow note
+  var noteEl = row.querySelector('.eow-note');
+  if (noteEl) noteEl.remove();
   if (salSpan) {
     if (fired)               { salSpan.textContent = '— despedido'; salSpan.className = 'salary-amount zero'; }
-    else if (rowData.salary > 0) { salSpan.textContent = rowData.salary + 'M'; salSpan.className = 'salary-amount'; }
+    else if (rowData.salary > 0) {
+      salSpan.textContent = rowData.salary + 'M'; salSpan.className = 'salary-amount';
+      if (isEow && rowData.eowRango && rowData.eowRango !== e.rango) {
+        var note = document.createElement('div');
+        note.className = 'eow-note';
+        note.style.cssText = 'font-size:0.58rem;color:#00b050;margin-top:2px';
+        note.textContent = '★ cobro como ' + rowData.eowRango;
+        salSpan.parentNode.appendChild(note);
+      }
+    }
     else if (rowData.totalMins === 0) { salSpan.textContent = '— sin horas'; salSpan.className = 'salary-amount zero'; }
     else                     { salSpan.textContent = '— no alcanza mín.'; salSpan.className = 'salary-amount zero'; }
   }
