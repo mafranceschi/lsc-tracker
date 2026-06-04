@@ -628,6 +628,12 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
 .salary-log-info { flex: 1; min-width: 0; cursor: pointer; }
 .salary-log-date { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--accent2); }
 .salary-log-summary { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-top: 0.1rem; }
+.billing-mode-btn { background: none; border: none; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; padding: 0.4rem 0.85rem; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.billing-mode-btn.active { background: rgba(var(--accentRGB),0.15); color: var(--accent); }
+.billing-mode-btn:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--text2); }
+.billing-day-block { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.billing-day-label { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent2); padding: 0.6rem 1rem 0.4rem; display: flex; justify-content: space-between; align-items: center; }
+.billing-day-block textarea { width: 100%; background: transparent; border: none; border-top: 1px solid var(--border); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 0.65rem 1rem; resize: vertical; min-height: 110px; outline: none; }
 
 /* Day groups – Historial */
 .hist-day-group { margin-bottom: 1rem; }
@@ -1022,21 +1028,41 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
       </div>
       <div class="content">
 
-        <!-- Input -->
+        <!-- Modo: Total / Por días -->
         <div class="section-block">
           <div class="section-label">01 · LOG DE MULTAS</div>
-          <div class="input-box">
+
+          <!-- Toggle modo -->
+          <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--muted)">Modo:</span>
+            <div style="display:flex;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+              <button id="billing-mode-total" class="billing-mode-btn active" onclick="setBillingMode('total')">Total</button>
+              <button id="billing-mode-days"  class="billing-mode-btn"        onclick="setBillingMode('days')">Por días</button>
+            </div>
+          </div>
+
+          <!-- Modo Total (default) -->
+          <div id="billing-total-wrap" class="input-box">
             <div style="display:flex;align-items:center;gap:0.6rem;padding:0.75rem 1.25rem 0;flex-wrap:wrap">
-              <span style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;flex:1">Pegá el historial copiado de Discord</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;flex:1">Pegá el historial completo de Discord</span>
               <span id="billingCounter" style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted)">0 chars</span>
             </div>
             <textarea id="billingInput"
               placeholder="✅ Multa Pagada&#10;El jugador ... ha pagado una multa.&#10;&#10;Motivo: Mecánico&#10;Monto: $1.000.000&#10;Emitida por: Joel Montoya (Joel #48)&#10;..."
               oninput="document.getElementById('billingCounter').textContent=this.value.length.toLocaleString()+' chars'"
-              style="min-height:200px"></textarea>
+              style="min-height:180px"></textarea>
             <div class="input-footer">
               <button class="btn-primary" onclick="parseBillingLog()">⚡ Parsear multas</button>
-              <button class="btn-ghost" onclick="document.getElementById('billingInput').value='';document.getElementById('billingCounter').textContent='0 chars';BILLING_STORE={};renderBillingResults()">Limpiar</button>
+              <button class="btn-ghost" onclick="clearBillingInputs()">Limpiar</button>
+            </div>
+          </div>
+
+          <!-- Modo Por días -->
+          <div id="billing-days-wrap" style="display:none">
+            <div id="billing-days-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-bottom:1rem"></div>
+            <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+              <button class="btn-primary" onclick="parseBillingLog()">⚡ Parsear multas</button>
+              <button class="btn-ghost" onclick="clearBillingInputs()">Limpiar todo</button>
             </div>
           </div>
         </div>
@@ -1842,8 +1868,65 @@ function fmtPesos(n) {
   return '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+// ── Facturación – modo Total / Por días ──────────────────────────────────────
+var BILLING_MODE = 'total';
+var BILLING_DAYS = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+
+function setBillingMode(mode) {
+  BILLING_MODE = mode;
+  var isTotal = mode === 'total';
+  document.getElementById('billing-total-wrap').style.display = isTotal ? '' : 'none';
+  document.getElementById('billing-days-wrap').style.display  = isTotal ? 'none' : '';
+  document.getElementById('billing-mode-total').classList.toggle('active', isTotal);
+  document.getElementById('billing-mode-days').classList.toggle('active', !isTotal);
+  if (!isTotal) _buildDayGrid();
+}
+
+function _buildDayGrid() {
+  var grid = document.getElementById('billing-days-grid');
+  if (!grid || grid.children.length === BILLING_DAYS.length) return;
+  grid.innerHTML = '';
+  for (var i = 0; i < BILLING_DAYS.length; i++) {
+    var day = BILLING_DAYS[i], idx = i;
+    var block = document.createElement('div');
+    block.className = 'billing-day-block';
+    var charsId = 'billing-day-chars-' + idx;
+    block.innerHTML = '<div class="billing-day-label"><span>' + day + '</span><span id="' + charsId + '" style="font-size:0.55rem;color:var(--muted);font-weight:400">0 chars</span></div>'
+      + '<textarea id="billing-day-' + idx + '" placeholder="Pegá el historial del ' + day.toLowerCase() + '..." oninput="document.getElementById(\'' + charsId + '\').textContent=this.value.length.toLocaleString()+\' chars\'"></textarea>';
+    grid.appendChild(block);
+  }
+}
+
+function clearBillingInputs() {
+  if (BILLING_MODE === 'total') {
+    var inp = document.getElementById('billingInput');
+    if (inp) inp.value = '';
+    var ctr = document.getElementById('billingCounter');
+    if (ctr) ctr.textContent = '0 chars';
+  } else {
+    for (var i = 0; i < BILLING_DAYS.length; i++) {
+      var ta = document.getElementById('billing-day-' + i);
+      if (ta) ta.value = '';
+      var ch = document.getElementById('billing-day-chars-' + i);
+      if (ch) ch.textContent = '0 chars';
+    }
+  }
+  BILLING_STORE = {};
+  renderBillingResults();
+}
+
 function parseBillingLog() {
-  var text = document.getElementById('billingInput').value;
+  var text;
+  if (BILLING_MODE === 'total') {
+    text = document.getElementById('billingInput').value;
+  } else {
+    var parts = [];
+    for (var i = 0; i < BILLING_DAYS.length; i++) {
+      var ta = document.getElementById('billing-day-' + i);
+      if (ta && ta.value.trim()) parts.push(ta.value);
+    }
+    text = parts.join('\n\n');
+  }
   if (!text.trim()) { showToast('Pegá el log primero', 'err'); return; }
 
   var newStore = {};
@@ -1960,11 +2043,12 @@ function saveSalaryState() {
       rows:       SALARY_ROWS_STORE,
       unmatched:  UNMATCHED_STORE,
       logs:       _lastSalaryLogs,
+      selLogs:    selectedSalaryLogs,
       manualEow:  MANUAL_EOW,
       manualSal:  MANUAL_SALARY,
       fired:      FIRED_STORE,
       promoted:   PROMOTED_STORE,
-      config:     SALARY_CONFIG,   // guardamos config para recalcular en restore
+      config:     SALARY_CONFIG,
       ts:         Date.now()
     }));
   } catch(e) {}
@@ -1989,6 +2073,7 @@ function restoreSalaryState() {
     _lastSalaryLogs   = s.logs || [];
     // Restaurar config salarial para que recalcAllSalaries() tenga los tramos correctos
     if (s.config && s.config.length) SALARY_CONFIG = s.config;
+    if (s.selLogs) selectedSalaryLogs = s.selLogs;
     recalcAllSalaries();
     renderSalaryResult(s.rows, s.unmatched || [], s.logs || [], true /*restoring*/);
     return true;
