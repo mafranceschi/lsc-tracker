@@ -1949,10 +1949,58 @@ var FIRED_STORE        = {}; // { empId: true } — despedidos
 var PROMOTED_STORE     = {}; // { empId: true } — ascensos
 var MANUAL_EOW         = null; // empId elegido a mano, o null = auto (más horas)
 var MANUAL_SALARY      = {}; // { empId: number } — sueldo editado a mano
+var _lastSalaryLogs    = []; // logs usados en el último renderSalaryResult (para restaurar)
+
+var _SAL_STATE_KEY = 'lsc_salary_state_v1';
+
+function saveSalaryState() {
+  if (!SALARY_ROWS_STORE.length) return;
+  try {
+    localStorage.setItem(_SAL_STATE_KEY, JSON.stringify({
+      rows:       SALARY_ROWS_STORE,
+      unmatched:  UNMATCHED_STORE,
+      logs:       _lastSalaryLogs,
+      manualEow:  MANUAL_EOW,
+      manualSal:  MANUAL_SALARY,
+      fired:      FIRED_STORE,
+      promoted:   PROMOTED_STORE,
+      ts:         Date.now()
+    }));
+  } catch(e) {}
+}
+
+function restoreSalaryState() {
+  try {
+    var raw = localStorage.getItem(_SAL_STATE_KEY);
+    if (!raw) return false;
+    var s = JSON.parse(raw);
+    if (!s || !s.rows || !s.rows.length) return false;
+    // Expirar después de 10 días
+    if (s.ts && (Date.now() - s.ts) > 10 * 24 * 3600 * 1000) {
+      localStorage.removeItem(_SAL_STATE_KEY); return false;
+    }
+    FIRED_STORE     = s.fired    || {};
+    PROMOTED_STORE  = s.promoted || {};
+    MANUAL_EOW      = s.manualEow !== undefined ? s.manualEow : null;
+    MANUAL_SALARY   = s.manualSal || {};
+    UNMATCHED_STORE = s.unmatched || [];
+    SALARY_ROWS_STORE = s.rows;
+    _lastSalaryLogs   = s.logs || [];
+    recalcAllSalaries();
+    renderSalaryResult(s.rows, s.unmatched || [], s.logs || [], true /*restoring*/);
+    return true;
+  } catch(e) { return false; }
+}
+
+function clearSalaryState() {
+  localStorage.removeItem(_SAL_STATE_KEY);
+}
 
 function loadSalaryTab() {
   loadSalaryConfigFromDB();
   loadSalaryLogs();
+  // Restaurar resultado previo si existe (no bloquea el flujo)
+  restoreSalaryState();
 }
 
 // ── Cargar config desde DB ─────────────────────
@@ -2338,6 +2386,7 @@ function toggleEow(empId) {
     updateSalaryRowStyle(SALARY_ROWS_STORE[i].emp.id);
   }
   _refreshSalaryTotals();
+  saveSalaryState();
 }
 
 function startSalaryEdit(empId) {
@@ -2369,6 +2418,7 @@ function startSalaryEdit(empId) {
     }
     updateSalaryRowStyle(empId);
     _refreshSalaryTotals();
+    saveSalaryState();
   }
   function cancel() { updateSalaryRowStyle(empId); }
   inp.addEventListener('keydown', function(ev) {
@@ -2379,7 +2429,8 @@ function startSalaryEdit(empId) {
   inp.addEventListener('blur', function() { if (!committed) { committed = true; commit(); } });
 }
 
-function renderSalaryResult(rows, unmatched, logs) {
+function renderSalaryResult(rows, unmatched, logs, _restoring) {
+  _lastSalaryLogs = logs || [];
   var el = document.getElementById('salaryResult');
 
   var RANK_ORDER = ['director','jefe','subjefe','ingeniero','experimentado'];
@@ -2391,10 +2442,15 @@ function renderSalaryResult(rows, unmatched, logs) {
     return b.totalMins - a.totalMins;        // dentro del rango: más horas primero
   });
 
-  // Store for Excel and toggles — reset manual overrides for fresh calculation
+  // Store for Excel and toggles
   SALARY_ROWS_STORE = rows;
-  MANUAL_EOW    = null;
-  MANUAL_SALARY = {};
+  if (!_restoring) {
+    // Fresh calculation: reset all manual overrides
+    MANUAL_EOW    = null;
+    MANUAL_SALARY = {};
+    FIRED_STORE   = {};
+    PROMOTED_STORE = {};
+  }
 
   // Apply EOW bonus via shared helper
   recalcAllSalaries();
@@ -2417,7 +2473,10 @@ function renderSalaryResult(rows, unmatched, logs) {
     + '<div class="section-card-title">03 · Resultado</div>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:0.75rem">'
     + '<span class="section-card-head" style="margin:0">Liquidación semanal</span>'
+    + '<div style="display:flex;gap:0.5rem;align-items:center">'
+    + '<button class="btn-ghost btn-sm" onclick="clearSalaryState();document.getElementById(\'salaryResult\').style.display=\'none\'" title="Limpiar resultado guardado" style="font-size:0.7rem;color:var(--muted)">✕ Limpiar</button>'
     + '<button class="btn-primary btn-sm" onclick="generateSalaryExcel()" style="gap:0.4rem">⬇ Descargar Excel</button>'
+    + '</div>'
     + '</div>'
     + '<div class="combined-days" style="margin-bottom:1.25rem">' + chipsHtml + '</div>'
     + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:var(--muted);margin-bottom:0.75rem">Usá ★ para cambiar el empleado de la semana · Click en el sueldo para editarlo · ↑ y ✕ para ascensos/despidos</div>'
@@ -2533,7 +2592,8 @@ function renderSalaryResult(rows, unmatched, logs) {
 
   el.innerHTML = html;
   el.style.display = 'block';
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!_restoring) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  saveSalaryState();
 }
 
 // ── Ascenso / Despedido toggles ──────────────────────────────────────────────
@@ -2546,6 +2606,7 @@ function toggleAscenso(empId) {
   recalcAllSalaries();
   for (var _i = 0; _i < SALARY_ROWS_STORE.length; _i++) updateSalaryRowStyle(SALARY_ROWS_STORE[_i].emp.id);
   _refreshSalaryTotals();
+  saveSalaryState();
 
   // Solo hace el cambio en DB cuando se marca (no cuando se desmarca)
   if (!wasOn) {
@@ -2585,6 +2646,7 @@ function toggleFired(empId) {
   recalcAllSalaries();
   for (var _i = 0; _i < SALARY_ROWS_STORE.length; _i++) updateSalaryRowStyle(SALARY_ROWS_STORE[_i].emp.id);
   _refreshSalaryTotals();
+  saveSalaryState();
 
   // Solo elimina de DB cuando se marca (no cuando se desmarca)
   if (!wasOn) {
