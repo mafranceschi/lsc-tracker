@@ -1000,7 +1000,7 @@ button { cursor: pointer; border: none; font-family: 'Inter', sans-serif; font-w
           <div class="section-card-title">02 · Semana a liquidar</div>
           <div class="section-card-head">Seleccionar ejecuciones</div>
           <div class="section-card-sub">Elegí los logs que componen la semana. Las horas de cada agente se sumarán automáticamente.</div>
-          <div id="salaryLogsWrap"></div>
+          <div id="salaryLogsWrap" style="max-height:420px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(139,92,246,0.3) transparent"></div>
           <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
             <button class="btn-primary" id="btnCalcSueldos" onclick="calcularSueldos()" disabled>📊 Calcular sueldos</button>
             <span id="salarySelCount" style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--muted)">Seleccioná al menos un log</span>
