@@ -2226,7 +2226,7 @@ function calcSalaryAmount(rango, totalMins, config) {
   return 0;
 }
 
-function calcularSueldos() {
+function calcularSueldos(onDone) {
   var logIds = Object.keys(selectedSalaryLogs);
   if (logIds.length === 0) { showToast('Seleccioná al menos un log', 'err'); return; }
   if (SALARY_CONFIG.length === 0) { showToast('Configurá la tabla salarial primero (Paso 1)', 'err'); return; }
@@ -2288,6 +2288,7 @@ function calcularSueldos() {
       }
 
       renderSalaryResult(rows, unmatched, sortedLogs);
+      if (typeof onDone === 'function') setTimeout(onDone, 0);
     })
     .catch(function() { showToast('❌ Error al cargar empleados', 'err'); });
 }
@@ -2963,8 +2964,12 @@ function addEmpleadoFromLog(idx) {
       row.innerHTML = '<div style="width:100%;font-size:0.78rem;color:var(--success);font-family:\'JetBrains Mono\',monospace;padding:0.1rem 0">✅ ' + esc(data.empleado.nombre) + ' agregado como ' + savedLabel + '</div>';
     }
     showToast('✅ ' + data.empleado.nombre + ' agregado', 'ok');
-    // Recalcular sueldos con los mismos logs seleccionados
-    calcularSueldos();
+    // Recalcular sueldos preservando la posición del scroll
+    var _savedScroll = document.documentElement.scrollTop || document.body.scrollTop;
+    calcularSueldos(function() {
+      document.documentElement.scrollTop = _savedScroll;
+      document.body.scrollTop = _savedScroll;
+    });
   })
   .catch(function() {
     showToast('❌ Error al agregar empleado', 'err');
