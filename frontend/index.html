@@ -3005,7 +3005,7 @@ function addEmpleadoFromLog(idx) {
   fetch('/api/empleados', {
     method: 'POST',
     headers: apiHeaders(),
-    body: JSON.stringify({ nombre: agent.name, identifier: identifier, rango: rango, discord: DISCORD_ENABLED })
+    body: JSON.stringify({ nombre: agent.name, identifier: identifier, rango: rango, recently_joined: true, discord: DISCORD_ENABLED })
   })
   .then(function(r) {
     if (r.status === 401) { handleUnauth(function() { addEmpleadoFromLog(idx); }); return null; }
