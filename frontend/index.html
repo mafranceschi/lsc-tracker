@@ -1964,6 +1964,7 @@ function saveSalaryState() {
       manualSal:  MANUAL_SALARY,
       fired:      FIRED_STORE,
       promoted:   PROMOTED_STORE,
+      config:     SALARY_CONFIG,   // guardamos config para recalcular en restore
       ts:         Date.now()
     }));
   } catch(e) {}
@@ -1986,6 +1987,8 @@ function restoreSalaryState() {
     UNMATCHED_STORE = s.unmatched || [];
     SALARY_ROWS_STORE = s.rows;
     _lastSalaryLogs   = s.logs || [];
+    // Restaurar config salarial para que recalcAllSalaries() tenga los tramos correctos
+    if (s.config && s.config.length) SALARY_CONFIG = s.config;
     recalcAllSalaries();
     renderSalaryResult(s.rows, s.unmatched || [], s.logs || [], true /*restoring*/);
     return true;
