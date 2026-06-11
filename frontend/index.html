@@ -856,6 +856,11 @@ textarea { font-size: 0.92rem; }
 .total-box-label, .total-box-sub { font-size: 0.7rem; }
 .total-box { animation: popIn 0.5s ease both; }
 
+/* ── Identifier copiable ── */
+.ident-copy { cursor: pointer; transition: color 0.15s, text-shadow 0.15s; }
+.ident-copy:hover { color: #5eead4 !important; text-shadow: 0 0 10px rgba(45,212,191,0.5); }
+.ident-copy:hover::after { content: ' ⧉'; font-size: 0.85em; }
+
 /* ── Misc ── */
 .chip { font-size: 0.72rem; padding: 0.28rem 0.78rem; }
 .day-chip { font-size: 0.72rem; padding: 0.3rem 0.82rem; }
@@ -1265,6 +1270,23 @@ var ALL_LOG_DATA = [];
 var selectedLogs = {};
 
 var ALL_TABS = ['analizar','historial','crear-emp','gest-emp','bot-horas','sueldos','facturacion'];
+
+// ══ COPIAR IDENTIFIER ═════════════════════════════
+function copyIdent(el) {
+  var full = el.getAttribute('data-full');
+  if (!full) return;
+  function ok() { showToast('📋 Identifier copiado', 'ok'); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(full).then(ok, function() { _copyFallback(full); ok(); });
+  } else { _copyFallback(full); ok(); }
+}
+function _copyFallback(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+}
 
 var RANK_CONFIG = {
   experimentado: { label: 'Experimentado', icon: '⭐', cls: 'r-experimentado' },
@@ -1681,7 +1703,7 @@ function renderEmpleados() {
         + '<div class="emp-avatar" style="background:' + col[0] + ';color:' + col[1] + '">' + esc(e.nombre.charAt(0).toUpperCase()) + '</div>'
         + '<div><div class="emp-name">' + esc(e.nombre) + '</div></div>'
         + '</div></td>'
-        + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;color:var(--muted)">' + esc(sid) + '</span></td>'
+        + '<td><span class="ident-copy" data-full="' + esc(e.identifier || '') + '" onclick="copyIdent(this)" title="Click para copiar" style="font-family:\'JetBrains Mono\',monospace;font-size:0.72rem;color:var(--muted)">' + esc(sid) + '</span></td>'
         + '<td><select class="rank-select-inline" onchange="cambiarRango(' + e.id + ', this.value)">' + rankOpts + '</select></td>'
         + '<td>' + recentBtn + '</td>'
         + '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:0.65rem;color:var(--muted)">' + fecha + '</span></td>'
@@ -1790,7 +1812,7 @@ function renderResult(agents, sessionCount) {
     html+='<div class="agent-card'+(isWarn?' card-warn':'')+(isGoal?' card-goal':'')+'" style="animation-delay:'+delay+'">'
       +'<div class="card-rank">#'+(i+1)+'</div>'
       +'<div class="card-top"><div class="card-avatar" style="background:'+color[0]+';color:'+color[1]+'">'+esc(a.name.charAt(0).toUpperCase())+'</div>'
-      +'<div class="card-info"><div class="card-name">'+esc(a.name)+'</div><div class="card-id">'+sid+'</div></div></div>'
+      +'<div class="card-info"><div class="card-name">'+esc(a.name)+'</div><div class="card-id ident-copy" data-full="'+(a.identifier.indexOf('__noid__')<0?esc(a.identifier):'')+'" onclick="copyIdent(this)" title="Click para copiar">'+sid+'</div></div></div>'
       +timeHtml
       +'<div class="prog-bar-wrap"><div class="prog-bar'+(isGoal?' reached':'')+'" style="width:'+pct+'%"></div></div>'
       +'<div class="prog-meta"><span class="prog-pct'+(isGoal?' reached':'')+'">'+pct+'%'+(isGoal?' ✓':'')+'</span><span class="prog-goal">objetivo '+goalLabel+'</span></div>'
@@ -2856,7 +2878,7 @@ function renderSalaryResult(rows, unmatched, logs, _restoring) {
       + '<div><div class="emp-name">' + esc(e.nombre)
       + ' <span id="eow-badge-' + e.id + '" style="font-size:0.6rem;color:#00b050' + (eowActive ? '' : ';display:none') + '">★ semana</span>'
       + (isRecentEmployee(e) ? ' <span style="font-size:0.6rem;color:#ffd966">● nuevo</span>' : '') + '</div>'
-      + (sid ? '<div class="emp-id-small">' + esc(sid) + '</div>' : '')
+      + (sid ? '<div class="emp-id-small ident-copy" data-full="' + esc(e.identifier || '') + '" onclick="copyIdent(this)" title="Click para copiar">' + esc(sid) + '</div>' : '')
       + '</div></div></td>'
       + '<td><span class="rank-badge ' + cfg.cls + '">' + cfg.icon + ' ' + cfg.label + '</span></td>'
       + '<td><span class="salary-hours">' + (r.totalMins > 0 ? t.str : '<span style="color:var(--muted)">—</span>') + '</span></td>'
@@ -2902,7 +2924,7 @@ function renderSalaryResult(rows, unmatched, logs, _restoring) {
         + '<div style="flex:1;min-width:160px">'
         + '<div style="font-size:0.84rem;font-weight:600">' + esc(a.name) + '</div>'
         + '<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.58rem;color:var(--muted);margin-top:0.1rem">'
-        + t2.str + (sid ? ' · ' + esc(sid) : '') + '</div>'
+        + t2.str + (sid ? ' · <span class="ident-copy" data-full="' + esc(a.identifier) + '" onclick="copyIdent(this)" title="Click para copiar">' + esc(sid) + '</span>' : '') + '</div>'
         + '</div>'
         + '<select class="rank-select-inline" id="rank-sel-' + i + '" onchange="UNMATCHED_STORE[' + i + '].selectedRank=this.value">' + rankOpts + '</select>'
         + '<button class="btn-primary btn-sm" id="btn-add-' + i + '" onclick="addEmpleadoFromLog(' + i + ')">'
