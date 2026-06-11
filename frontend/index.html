@@ -2043,7 +2043,6 @@ function saveSalaryState() {
       rows:       SALARY_ROWS_STORE,
       unmatched:  UNMATCHED_STORE,
       logs:       _lastSalaryLogs,
-      selLogs:    selectedSalaryLogs,
       manualEow:  MANUAL_EOW,
       manualSal:  MANUAL_SALARY,
       fired:      FIRED_STORE,
@@ -2073,7 +2072,6 @@ function restoreSalaryState() {
     _lastSalaryLogs   = s.logs || [];
     // Restaurar config salarial para que recalcAllSalaries() tenga los tramos correctos
     if (s.config && s.config.length) SALARY_CONFIG = s.config;
-    if (s.selLogs) selectedSalaryLogs = s.selLogs;
     recalcAllSalaries();
     renderSalaryResult(s.rows, s.unmatched || [], s.logs || [], true /*restoring*/);
     return true;
