@@ -3131,10 +3131,9 @@ function updateSalaryRowStyle(empId) {
 }
 
 // ── Excel export ──────────────────────────────────────────────────────────────
-// generateSalaryExcel: loads plantilla.xlsx from server, replaces employee
-// section (rows 1-19), preserves FACTURACION + ECONOMIA history (rows 20+).
-// To update the billing history, replace frontend/plantilla.xlsx with your
-// latest downloaded file (the one you already filled in).
+// generateSalaryExcel: loads plantilla.xlsx from server (for styling/layout)
+// and writes only the employee section. Any extra content in the template
+// (e.g. FACTURACION / ECONOMIA history) is cleared from the output.
 async function generateSalaryExcel() {
   if (!SALARY_ROWS_STORE.length) { showToast('No hay datos para exportar', 'err'); return; }
   if (typeof XLSX === 'undefined') { showToast('❌ Librería Excel no cargó. Recargá la página', 'err'); return; }
@@ -3194,10 +3193,12 @@ async function generateSalaryExcel() {
   var NCOLS = 10;
   var CA=0, CB=1, CC=2, CD=3, CE=4, CF=5, CF2=6, CG=7, CH=8, CI=9;
 
-  // ── Clear rows 0–18 (Excel 1–19, the employee section) ────────────────
-  for (var r = 0; r <= 18; r++) {
-    for (var c = 0; c < NCOLS; c++) dc(r, c);
+  // ── Clear the whole template (employee section + old history rows) ────
+  var tmplRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:J1');
+  for (var r = 0; r <= tmplRange.e.r; r++) {
+    for (var c = 0; c <= Math.max(tmplRange.e.c, NCOLS - 1); c++) dc(r, c);
   }
+  if (ws['!merges']) ws['!merges'] = [];
 
   // ── Row 0: headers ────────────────────────────────────────────────────
   sc(0,CA,  emptyCell(CLR_WHITE));
@@ -3295,17 +3296,10 @@ async function generateSalaryExcel() {
   sc(curRow,CI,  sumCell(''));
   curRow++;
 
-  // ── Pad with empty rows until row 19 (FACTURACION stays at row 20) ────
-  while (curRow < 19) {
-    for (var c = 0; c < NCOLS; c++) sc(curRow, c, {v:'',t:'s'});
-    curRow++;
-  }
-
-  // ── Update sheet ref to cover everything ─────────────────────────────
-  var tRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:I1');
+  // ── Update sheet ref to cover only the employee section ──────────────
   ws['!ref'] = XLSX.utils.encode_range({
     s: {r:0, c:0},
-    e: {r: Math.max(tRange.e.r, 18), c: Math.max(tRange.e.c, NCOLS-1)}
+    e: {r: Math.max(curRow - 1, 0), c: NCOLS - 1}
   });
 
   // ── Download ───────────────────────────────────────────────────────────
