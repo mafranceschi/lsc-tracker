@@ -2113,20 +2113,91 @@ function renderSalaryBrackets(brackets) {
     grouped[b.rango].push(b);
   }
   var order = ['experimentado','ingeniero','subjefe','jefe','director'];
-  var html = '<div class="brackets-grid">';
+  var html = '<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">'
+    + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.7rem;color:var(--muted)">Ajuste global:</span>'
+    + '<input type="number" id="bulkSalaryDelta" step="1" placeholder="±M" style="width:80px;background:rgba(255,255,255,0.08);border:1px solid rgba(139,92,246,0.5);border-radius:6px;color:#f0f0f8;padding:4px 8px;font-family:\'JetBrains Mono\',monospace;font-size:0.8rem;outline:none">'
+    + '<button class="btn-primary btn-sm" onclick="applyBulkSalaryDelta()">Aplicar a todos</button>'
+    + '<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.62rem;color:var(--muted)">suma esa cantidad a todos los tramos (negativo para restar)</span>'
+    + '</div>';
+  html += '<div class="brackets-grid">';
   for (var ri = 0; ri < order.length; ri++) {
     var rank = order[ri];
     if (!grouped[rank]) continue;
     var cfg = RANK_CONFIG[rank] || { label: rank, icon: '' };
     var rows = grouped[rank].slice().sort(function(a,b){ return a.min_hrs - b.min_hrs; });
-    html += '<div class="bracket-card"><div class="bracket-rank">' + cfg.icon + ' ' + cfg.label + '</div><div class="bracket-rows">';
     for (var j = 0; j < rows.length; j++) {
-      html += '<div class="bracket-row"><span class="bracket-range">' + esc(rows[j].display || rows[j].min_hrs + 'h+') + '</span><span class="bracket-amount">' + rows[j].amount + 'M</span></div>';
+      var bIdx = brackets.indexOf(rows[j]);
+      var label = (rows[j].display || rows[j].min_hrs + 'h+').replace(/:?\s*\d+(?:\.\d+)?\s*[Mm]\s*$/, '');
+      if (j === 0) html += '<div class="bracket-card"><div class="bracket-rank">' + cfg.icon + ' ' + cfg.label + '</div><div class="bracket-rows">';
+      html += '<div class="bracket-row"><span class="bracket-range">' + esc(label) + '</span>'
+        + '<span class="bracket-amount" style="cursor:pointer" title="Click para editar" onclick="startBracketEdit(' + bIdx + ', this)">' + rows[j].amount + 'M</span></div>';
     }
     html += '</div></div>';
   }
   html += '</div>';
   el.innerHTML = html;
+}
+
+// ── Edición en caliente de tramos ────────────────
+function startBracketEdit(idx, span) {
+  var b = SALARY_CONFIG[idx];
+  if (!b) return;
+  var inp = document.createElement('input');
+  inp.type = 'number'; inp.min = '0'; inp.step = '1'; inp.value = b.amount;
+  inp.style.cssText = 'width:70px;background:rgba(255,255,255,0.08);border:1px solid rgba(139,92,246,0.5);border-radius:6px;color:#f0f0f8;padding:2px 6px;font-family:\'JetBrains Mono\',monospace;font-size:0.8rem;font-weight:700;outline:none';
+  span.replaceWith(inp);
+  inp.focus(); inp.select();
+  var done = false;
+  function commit() {
+    if (done) return; done = true;
+    var val = parseFloat(inp.value);
+    if (!isNaN(val) && val >= 0 && val !== b.amount) {
+      b.amount = val;
+      saveSalaryBrackets();
+    } else {
+      renderSalaryBrackets(SALARY_CONFIG);
+    }
+  }
+  function cancel() { if (done) return; done = true; renderSalaryBrackets(SALARY_CONFIG); }
+  inp.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Enter')  { ev.preventDefault(); commit(); }
+    if (ev.key === 'Escape') { ev.preventDefault(); cancel(); }
+  });
+  inp.addEventListener('blur', commit);
+}
+
+function applyBulkSalaryDelta() {
+  var inp = document.getElementById('bulkSalaryDelta');
+  var delta = parseFloat(inp && inp.value);
+  if (isNaN(delta) || delta === 0) { showToast('Ingresá una cantidad distinta de cero', 'err'); return; }
+  if (!SALARY_CONFIG.length) { showToast('No hay tabla salarial cargada', 'err'); return; }
+  for (var i = 0; i < SALARY_CONFIG.length; i++) {
+    SALARY_CONFIG[i].amount = Math.max(0, SALARY_CONFIG[i].amount + delta);
+  }
+  saveSalaryBrackets((delta > 0 ? '+' : '') + delta + 'M aplicado a todos los tramos');
+}
+
+function saveSalaryBrackets(toastMsg) {
+  fetch('/api/salary-config', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ brackets: SALARY_CONFIG, discord: false }) })
+    .then(function(r) {
+      if (r.status === 401) { handleUnauth(function() { saveSalaryBrackets(toastMsg); }); return null; }
+      return r.json();
+    })
+    .then(function(data) {
+      if (!data) return;
+      if (data.error) { showToast('❌ ' + data.error, 'err'); return; }
+      SALARY_CONFIG = data.brackets || SALARY_CONFIG;
+      renderSalaryBrackets(SALARY_CONFIG);
+      // Si ya hay un resultado calculado, recalcular con la nueva tabla
+      if (SALARY_ROWS_STORE.length) {
+        recalcAllSalaries();
+        for (var i = 0; i < SALARY_ROWS_STORE.length; i++) updateSalaryRowStyle(SALARY_ROWS_STORE[i].emp.id);
+        _refreshSalaryTotals();
+        saveSalaryState();
+      }
+      showToast('✅ ' + (toastMsg || 'Tabla salarial actualizada'), 'ok');
+    })
+    .catch(function() { showToast('❌ Error al guardar la tabla', 'err'); });
 }
 
 // ── Parsear texto de tabla salarial ─────────────
